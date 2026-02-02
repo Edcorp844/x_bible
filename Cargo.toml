@@ -27,6 +27,7 @@ libc = "0.2.180"
 regex = "1.12.2"
 scraper = "0.25.0"
 ego-tree = "0.10.0"
+relm4-icons = "0.10.1"
 
 
 [build-dependencies]

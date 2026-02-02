@@ -70,8 +70,14 @@ fn main() {
 
     // 4. --- COMPILE GTK RESOURCES ---
     glib_build_tools::compile_resources(
-        &["resources"],
-        "resources/resources.gresource.xml",
+        &["data"],
+        "data/resources.gresource.xml",
         "xbible.gresource",
+    );
+
+    glib_build_tools::compile_resources(
+        &["data/icons"],
+        "data/icons/icons.gresource.xml",
+        "icons.gresource",
     );
 }

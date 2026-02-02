@@ -1,4 +1,4 @@
-use gtk::prelude::*;
+use adw::prelude::*;
 use relm4::prelude::*;
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -28,7 +28,9 @@ impl SimpleComponent for StudyPage {
     type Output = ();
 
     view! {
-        gtk::Box {
+        adw::NavigationPage{
+            #[wrap(Some)]
+            set_child=&gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
             gtk::ScrolledWindow {
                 set_vexpand: true,
@@ -46,7 +48,7 @@ impl SimpleComponent for StudyPage {
                     }
             }
             }
-        }
+        }}
     }
 
     fn init(

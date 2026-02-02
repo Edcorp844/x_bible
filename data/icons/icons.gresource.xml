@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+    <gresource prefix="/com/example/xbible/icons/24x24/actions/">
+        <file preprocess="xml-stripblanks" alias="headphones-symbolic.svg">headphones.svg</file>
+        <file preprocess="xml-stripblanks" alias="commentaries-symbolic.svg">commentaries.svg</file>
+        <file preprocess="xml-stripblanks" alias="dictionaries-symbolic.svg">dictionaries.svg</file>
+         <file preprocess="xml-stripblanks" alias="map-symbolic.svg">map.svg</file>
+         <file preprocess="xml-stripblanks" alias="books-symbolic.svg">books.svg</file>
+         <file preprocess="xml-stripblanks" alias="store-symbolic.svg">store.svg</file>
+        <file preprocess="xml-stripblanks" alias="audio-bible-symbolic.svg">audio-bible.svg</file>
+         <file preprocess="xml-stripblanks" alias="bibles-symbolic.svg">bibles.svg</file>
+    </gresource>
+</gresources>

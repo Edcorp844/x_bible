@@ -1,0 +1,54 @@
+label {
+    font-size: 12pt;
+}
+.app-title{
+    font-weight: 600;
+    font-size: 20pt;
+}
+
+.sidebar_icon{
+    color: var(--accent-color);
+}
+
+.verser-number {
+    color: var(--blue-3);
+}
+
+.word-wrapper:hover {
+    background-color: var(--headerbar-bg-color);
+    border-radius: 8pt;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.verse-note {
+    background-color: var(--headerbar-bg-color);
+    padding-right: 5pt;
+    padding-left: 5pt;
+    padding-top: 2pt;
+    padding-bottom: 2pt;
+    border-radius: 8pt;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.book-cover {
+    background: linear-gradient(to right, 
+        rgba(0,0,0,0.2) 0%, 
+        rgba(255,255,255,0.1) 5%, 
+        transparent 10%),
+        #34495e; /* Default book color */
+    border-radius: 4px 8px 8px 4px; /* Curved right edge like pages */
+    box-shadow: 2px 4px 10px rgba(0,0,0,0.3);
+    padding: 1rem;
+    border-left: 2px solid rgba(255,255,255,0.2);
+}
+.book-description-text {
+   font-size: 18px; 
+    font-family: serif;
+    padding: 10px;
+    font-weight: normal;
+}
+
+.book-title-caption {
+    font-weight: bold;
+    margin-top: 4px;
+}

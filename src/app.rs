@@ -1,31 +1,51 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use std::sync::Arc;
+use std::{any::Any, collections::HashMap, sync::Arc};
 
 use crate::features::{
-    bible::components::page::model::{StudyInput, StudyPage},
-    core::{sword_engine::SwordEngine, sword_module::SwordModule},
+    bible::components::page::{
+        self,
+        model::{StudyInput, StudyPage},
+    },
+    core::{
+        components::sidebar::{NavigationPage, SideBar, SidebarMessage},
+        pages::library::library_page::{LibraryPage, LibraryPageCategory},
+        sword_engine::SwordEngine,
+    },
 };
 
+enum PageController {
+    Bible(Controller<StudyPage>),
+    Library(Controller<LibraryPage>),
+}
+
+impl PageController {
+    fn widget(&self) -> &adw::NavigationPage {
+        match self {
+            Self::Bible(c) => c.widget(),
+            Self::Library(c) => c.widget(),
+        }
+    }
+}
 pub struct AppModel {
+    side_bar: Controller<SideBar>,
+    pages_cache: HashMap<String, PageController>,
     engine: Arc<SwordEngine>,
-    study_page: Controller<StudyPage>,
-    modules: gtk::StringList,
-    bible_data: Vec<SwordModule>,
-    has_modules: bool,
+    is_sidebar_visible: bool,
+    current_page_key: String,
 }
 
 #[derive(Debug)]
-pub enum AppInput {
-    Search(String),
-    ModuleChanged(String),
-    RefreshModules, // Useful for when a user finishes an install
+pub enum AppInputMessage {
+    ToggleSidebar,
+    SetContentPage(NavigationPage),
+    SetSidebarVisibility(bool),
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for AppModel {
     type Init = ();
-    type Input = AppInput;
+    type Input = AppInputMessage;
     type Output = ();
 
     view! {
@@ -33,85 +53,52 @@ impl SimpleComponent for AppModel {
             set_default_width: 1000,
             set_default_height: 800,
 
-            gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
+            #[name = "split_view"]
+            adw::OverlaySplitView {
+                // This forces the "overlay" mode regardless of window size
+                set_collapsed: true,
 
-                // 1. Header is only visible if we have something to read
-                adw::HeaderBar {
-                    #[watch]
-                    set_visible: model.has_modules,
+                // Sync UI visibility to Model
+                #[watch]
+                set_show_sidebar: model.is_sidebar_visible,
 
-                    #[wrap(Some)]
-                    set_title_widget = &gtk::Box {
-                        set_spacing: 12,
-                        set_halign: gtk::Align::Center,
-
-                        gtk::Entry {
-                            set_placeholder_text: Some("Enter Reference (e.g. John 3:16)"),
-                            set_max_width_chars: 30,
-                            connect_activate[sender] => move |entry| {
-                                sender.input(AppInput::Search(entry.text().to_string()));
-                            }
-                        },
-
-                        gtk::DropDown {
-                            set_model: Some(&model.modules),
-                            #[watch]
-                            set_selected: 0,
-
-                            connect_selected_item_notify[sender] => move |dd| {
-                                if let Some(item) = dd.selected_item() {
-                                    if let Some(obj) = item.downcast_ref::<gtk::StringObject>() {
-                                        sender.input(AppInput::ModuleChanged(obj.string().to_string()));
-                                    }
-                                }
-                            }
-                        }
-                    }
+                // Detect when the sidebar is closed by clicking away or swiping
+                connect_show_sidebar_notify[sender] => move |view| {
+                    sender.input(AppInputMessage::SetSidebarVisibility(view.shows_sidebar()));
                 },
 
-                // 2. Main Content Stack
-                gtk::Stack {
-                    set_vexpand: true,
-                    // Transitions smoothly between screens
-                    set_transition_type: gtk::StackTransitionType::Crossfade,
+                #[wrap(Some)]
+                set_sidebar = &gtk::Box {
+                    add_css_class: "sidebar-view",
+                    #[local_ref]
+                    sidebar_widget -> adw::NavigationPage {},
+                },
 
-                    #[watch]
-                    set_visible_child_name: if model.has_modules { "bible_view" } else { "install_view" },
-
-                    // VIEW: Installation Screen
-                    add_named[Some("install_view")] = &gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 24,
-
-                        adw::HeaderBar{},
-
-                        adw::StatusPage {
-                            set_title: "Welcome to XBible",
-                            set_description: Some("No Bible modules found in your AppData folder. Please install one to begin."),
-                            set_icon_name: Some("library-symbolic"),
+                #[wrap(Some)]
+                set_content = &adw::ToolbarView {
+                    add_top_bar = &adw::HeaderBar {
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: "XBible",
                         },
 
-                        gtk::Button {
-                            set_label: "Download Bible Modules",
-                            set_halign: gtk::Align::Center,
-                            add_css_class: "suggested-action",
-                            add_css_class: "pill",
-                            set_margin_bottom: 100,
-                            // connect_clicked => sender.input(AppInput::OpenInstaller),
+                        pack_start = &gtk::ToggleButton {
+                            set_icon_name: "sidebar-show-symbolic",
+                            // Keep the button toggle state in sync with the actual visibility
+                            #[watch]
+                            set_active: model.is_sidebar_visible,
+
+                            connect_clicked[sender] => move |_| {
+                                sender.input(AppInputMessage::ToggleSidebar);
+                            }
                         }
                     },
 
-                    // VIEW: Bible Reader
-                    add_named[Some("bible_view")] = &gtk::Box {
-                        set_orientation: gtk::Orientation::Horizontal,
-
-                        #[local_ref]
-                        study_page_widget -> gtk::Box {
-                            set_vexpand: true,
-                            set_hexpand: true,
-                        },
-                    }
+                     #[wrap(Some)]
+                    set_content = &adw::Bin {
+                        #[watch]
+                        set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
+                    },
                 }
             }
         }
@@ -122,39 +109,34 @@ impl SimpleComponent for AppModel {
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        // Initialize the engine and check for content
-        let engine = SwordEngine::new();
-        let bible_data = engine.get_modules(); // Now returns Vec<SwordModule>
-        let has_modules = !bible_data.is_empty();
+        let engine = Arc::new(SwordEngine::new());
 
-        // Populate the DropDown list
-        let modules_ui = gtk::StringList::new(&[]);
-        for module in &bible_data {
-            modules_ui.append(&module.name);
-        }
+        let side_bar = SideBar::builder()
+            .launch(())
+            .forward(sender.input_sender(), |message| match message {
+                SidebarMessage::ToggleSidebar => AppInputMessage::ToggleSidebar,
+                SidebarMessage::SelectPage(page) => AppInputMessage::SetContentPage(page),
+            });
 
-        // Get the first Bible or a dummy string
-        let first_bible = bible_data
-            .first()
-            .map(|m| m.name.clone())
-            .unwrap_or_else(|| "".to_string());
+        let bible_page = PageController::Bible(
+            StudyPage::builder()
+                .launch((engine.clone().mgr, "KJV".to_string()))
+                .detach(),
+        );
 
-        let engine_arc = Arc::new(engine);
-
-        // Start the StudyPage (it will be hidden if has_modules is false)
-        let study_page = StudyPage::builder()
-            .launch((engine_arc.mgr, first_bible))
-            .detach();
+        let mut pages_cache = HashMap::new();
+        pages_cache.insert("bible".to_string(), bible_page);
 
         let model = AppModel {
-            engine: engine_arc,
-            study_page,
-            modules: modules_ui,
-            bible_data,
-            has_modules,
+            side_bar,
+            engine,
+            is_sidebar_visible: false,
+            pages_cache: pages_cache,
+            current_page_key: "bible".to_string(),
         };
 
-        let study_page_widget = model.study_page.widget();
+        let sidebar_widget = model.side_bar.widget();
+
         let widgets = view_output!();
 
         ComponentParts { model, widgets }
@@ -162,24 +144,33 @@ impl SimpleComponent for AppModel {
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
-            AppInput::Search(reference) => {
-                if self.has_modules {
-                    self.study_page.emit(StudyInput::LoadReference(reference));
+            AppInputMessage::ToggleSidebar => {
+                self.is_sidebar_visible = !self.is_sidebar_visible;
+            }
+            AppInputMessage::SetSidebarVisibility(visible) => {
+                // Only update if the state actually changed to prevent loops
+                if self.is_sidebar_visible != visible {
+                    self.is_sidebar_visible = visible;
                 }
             }
-            AppInput::ModuleChanged(module_name) => {
-                self.study_page.emit(StudyInput::SetModule(module_name));
-            }
-            AppInput::RefreshModules => {
-                // Logic to re-scan the AppData folder after a download
-                self.bible_data = self.engine.get_modules();
-                self.has_modules = !self.bible_data.is_empty();
+            AppInputMessage::SetContentPage(page) => {
+                let key = page.to_key();
 
-                // Rebuild the UI list
-                self.modules = gtk::StringList::new(&[]);
-                for m in &self.bible_data {
-                    self.modules.append(&m.name);
+                if !self.pages_cache.contains_key(&key) {
+                    match page {
+                        NavigationPage::Bible => {}
+                        NavigationPage::Library(category) => {
+                            let libarary_page = LibraryPage::builder()
+                                .launch((LibraryPageCategory::from_label(category.as_str()), self.engine.clone()))
+                                .detach();
+                            self.pages_cache
+                                .insert(key.clone(), PageController::Library(libarary_page));
+                        }
+                        _ => {}
+                    }
                 }
+
+                self.current_page_key = key;
             }
         }
     }

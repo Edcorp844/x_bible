@@ -35,7 +35,7 @@ label {
         rgba(0,0,0,0.2) 0%, 
         rgba(255,255,255,0.1) 5%, 
         transparent 10%),
-        #34495e; /* Default book color */
+        var(--dark-2); /* Default book color */
     border-radius: 4px 8px 8px 4px; /* Curved right edge like pages */
     box-shadow: 2px 4px 10px rgba(0,0,0,0.3);
     padding: 1rem;
@@ -46,6 +46,7 @@ label {
     font-family: serif;
     padding: 10px;
     font-weight: normal;
+    color: #fff;
 }
 
 .book-title-caption {

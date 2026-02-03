@@ -1,9 +1,8 @@
 use adw::prelude::*;
-use gtk::prelude::*;
 use relm4::{Component, ComponentParts, factory::FactoryVecDeque, prelude::*};
 use std::sync::Arc;
 
-use crate::features::core::sword_engine::SwordEngine;
+use crate::features::core::module_engine::sword_engine::SwordEngine;
 
 // --- 1. The Book Cover Factory Component ---
 
@@ -11,11 +10,12 @@ use crate::features::core::sword_engine::SwordEngine;
 pub struct ModuleItem {
     pub name: String,
     pub description: String,
+    pub language: String,
 }
 
 #[relm4::factory(pub)]
 impl FactoryComponent for ModuleItem {
-    type Init = (String, String);
+    type Init = (String, String, String);
     type Input = ();
     type Output = String;
     type CommandOutput = ();
@@ -26,44 +26,52 @@ impl FactoryComponent for ModuleItem {
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
             set_spacing: 12,
-            set_margin_all: 12,
-          // set_width_request: 170,
+            set_margin_horizontal: 6,
+            set_margin_vertical: 12,
+            set_width_request: 200,
+            set_halign: gtk::Align::Center,
 
             // The Physical Book Shape
             gtk::Box {
                 add_css_class: "book-cover",
                 set_size_request: (200, 260),
-                // Center the book itself in the grid cell
                 set_halign: gtk::Align::Center,
+                set_overflow: gtk::Overflow::Hidden,
 
-                // Inner Box to force vertical and horizontal centering
                 gtk::Box {
                     set_hexpand: true,
                     set_vexpand: true,
                     set_valign: gtk::Align::Center,
                     set_halign: gtk::Align::Center,
-                    set_margin_all: 15, // Keep text away from book edges
-                    set_margin_start: 20,
+                    set_margin_all: 15,
+                    set_orientation: gtk::Orientation::Vertical,
 
                     gtk::Label {
                         set_label: &self.description,
                         set_wrap: true,
-                        set_lines: 10,
                         set_justify: gtk::Justification::Center,
-                        // Remove set_ellipsize so all words show
-                        // Remove set_max_width_chars to let wrap handle it
-                        set_ellipsize: gtk::pango::EllipsizeMode::End,
+                        set_max_width_chars: 18,
                         add_css_class: "book-description-text",
+                    },
+
+                     gtk::Label {
+                        set_label: &self.name,
+                        set_wrap: true,
+                        set_justify: gtk::Justification::Center,
+                        set_max_width_chars: 18,
+                        add_css_class: "book-description-text",
+                        set_margin_top: 10,
                     }
                 }
             },
 
-            // Module Name (Caption below the book)
             gtk::Label {
-                set_label: &self.name,
+                set_label: &self.language,
                 set_wrap: true,
                 set_justify: gtk::Justification::Center,
                 set_halign: gtk::Align::Center,
+                // 3. Ensure the caption also respects the 200px limit
+                set_max_width_chars: 20,
                 add_css_class: "book-title-caption",
             }
         }
@@ -73,6 +81,7 @@ impl FactoryComponent for ModuleItem {
         Self {
             name: init.0,
             description: init.1,
+            language: init.2,
         }
     }
 }
@@ -101,16 +110,6 @@ impl LibraryPageCategory {
             _ => Self::Bible,
         }
     }
-
-    fn to_sword_filter(&self) -> Vec<&str> {
-        match self {
-            Self::Bible => vec!["Biblical Texts", "Bibles"],
-            Self::Commentary => vec!["Commentaries"],
-            Self::Dictionary => vec!["Lexicons", "Dictionaries"],
-            Self::Book => vec!["Generic Books"],
-            _ => vec![],
-        }
-    }
 }
 
 // --- 3. The Main Component ---
@@ -119,6 +118,7 @@ pub struct LibraryPage {
     category: LibraryPageCategory,
     engine: Arc<SwordEngine>,
     modules: FactoryVecDeque<ModuleItem>,
+    is_sidebar_visible: bool,
 }
 
 #[derive(Debug)]
@@ -127,11 +127,16 @@ pub enum LibraryPageInput {
     Refresh,
 }
 
+#[derive(Debug)]
+pub enum LibraryPageOutput {
+    ToggleSidebar,
+}
+
 #[relm4::component(pub)]
 impl Component for LibraryPage {
-    type Init = (LibraryPageCategory, Arc<SwordEngine>);
+    type Init = (LibraryPageCategory, Arc<SwordEngine>, bool);
     type Input = LibraryPageInput;
-    type Output = ();
+    type Output = LibraryPageOutput;
     type CommandOutput = ();
 
     view! {
@@ -140,22 +145,42 @@ impl Component for LibraryPage {
             set_title: &format!("{:?}", model.category),
 
             #[wrap(Some)]
-            set_child = &gtk::ScrolledWindow {
-                set_hscrollbar_policy: gtk::PolicyType::Never,
-                set_vexpand: true,
+            set_child = &adw::ToolbarView {
+                    add_top_bar = &adw::HeaderBar {
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: "XBible",
+                        },
 
-                // We name this container so we can mount the factory into it manually
-                #[name = "library_grid"]
-                gtk::FlowBox {
-                    set_valign: gtk::Align::Start,
-                    set_max_children_per_line: 8,
-                    set_min_children_per_line: 2,
-                    set_selection_mode: gtk::SelectionMode::None,
-                    set_activate_on_single_click: true,
-                    set_margin_all: 24,
-                    set_column_spacing: 12,
-                    set_row_spacing: 12,
-                    add_css_class:"flat"
+                        pack_start = &gtk::ToggleButton {
+                            set_icon_name: "sidebar-show-symbolic",
+                            // Keep the button toggle state in sync with the actual visibility
+                            #[watch]
+                            set_active: model.is_sidebar_visible,
+
+                            connect_clicked[sender] => move |_| {
+                                sender.output(LibraryPageOutput::ToggleSidebar);
+                            }
+                        }
+                    },
+
+                     #[wrap(Some)]
+                    set_content=&gtk::ScrolledWindow {
+                        set_hscrollbar_policy: gtk::PolicyType::Never,
+                        set_vexpand: true,
+
+                        // We name this container so we can mount the factory into it manually
+                        #[name = "library_grid"]
+                        gtk::FlowBox {
+                            set_valign: gtk::Align::Start,
+                            set_max_children_per_line: 8,
+                            set_min_children_per_line: 2,
+                            set_selection_mode: gtk::SelectionMode::None,
+                            set_activate_on_single_click: true,
+                            set_margin_all: 24,
+                            set_column_spacing: 12,
+                            set_row_spacing: 12,
+                        }
                 }
             }
         }
@@ -166,7 +191,7 @@ impl Component for LibraryPage {
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let (category, engine) = init;
+        let (category, engine, is_sidebar_visible) = init;
 
         // Use the builder to launch the factory correctly
         let modules = FactoryVecDeque::builder()
@@ -177,6 +202,7 @@ impl Component for LibraryPage {
             category,
             engine,
             modules,
+            is_sidebar_visible
         };
 
         // Populate initial data
@@ -204,18 +230,24 @@ impl Component for LibraryPage {
 }
 
 impl LibraryPage {
-    /// Filters and loads modules from the engine into the UI factory
     fn sync_modules(&mut self) {
         let mut guard = self.modules.guard();
         guard.clear();
 
-        let filter = self.category.to_sword_filter();
-        let available_modules = self.engine.get_modules();
+        let modules = match self.category {
+            LibraryPageCategory::Bible => self.engine.get_bible_modules(),
+            LibraryPageCategory::Commentary => self.engine.get_commentary_modules(),
+            LibraryPageCategory::Dictionary => self.engine.get_dictionary_modules(),
+            LibraryPageCategory::Book => self.engine.get_book_modules(),
+            LibraryPageCategory::Map => self.engine.get_map_modules(),
+            // For categories not yet specifically handled in the engine,
+            // you can return an empty vec or a general fetcher
+            LibraryPageCategory::AudioBible => Vec::new(),
+        };
 
-        for module in available_modules {
-            if filter.is_empty() || filter.contains(&module.category.as_str()) {
-                guard.push_back((module.name, module.description));
-            }
+        // 3. Push the results into the UI Factory
+        for module in modules {
+            guard.push_back((module.name, module.description, module.language));
         }
     }
 }

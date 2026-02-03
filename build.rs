@@ -7,7 +7,7 @@ fn main() {
     let sword_src = root.join("sword");
 
     let dst = cmake::Config::new(&sword_src)
-        .define("SWORD_BUILD_SHARED", "OFF") // Keep our core engine static
+        .define("SWORD_BUILD_SHARED", "OFF") // Keep engine static
         .define("SWORD_BUILD_EXAMPLES", "OFF")
         .define("SWORD_BUILD_TESTS", "OFF")
         .build();
@@ -20,19 +20,15 @@ fn main() {
 
     match target_os.as_str() {
         "windows" => {
-            // Static link compression to reduce DLL count for the user
             println!("cargo:rustc-link-lib=static=z");
             println!("cargo:rustc-link-lib=static=bz2");
             println!("cargo:rustc-link-lib=static=lzma");
-
-            // Dynamic link networking and system libs
             println!("cargo:rustc-link-lib=dylib=curl");
             println!("cargo:rustc-link-lib=dylib=ws2_32");
             println!("cargo:rustc-link-lib=dylib=crypt32");
             println!("cargo:rustc-link-lib=dylib=stdc++");
         }
         "macos" => {
-            // macOS standard paths
             println!("cargo:rustc-link-lib=dylib=curl");
             println!("cargo:rustc-link-lib=dylib=z");
             println!("cargo:rustc-link-lib=dylib=bz2");
@@ -42,7 +38,17 @@ fn main() {
             println!("cargo:rustc-link-lib=framework=Security");
         }
         _ => {
-            // Linux: Try to link statically where possible for portability (AppImage style)
+            // Linux: Use pkg-config to link ICU and other system libs
+            let icu_uc = pkg_config::Config::new().probe("icu-uc").unwrap();
+            let icu_i18n = pkg_config::Config::new().probe("icu-i18n").unwrap();
+
+            for lib_path in icu_uc.link_paths.iter().chain(icu_i18n.link_paths.iter()) {
+                println!("cargo:rustc-link-search=native={}", lib_path.display());
+            }
+            for lib in icu_uc.libs.iter().chain(icu_i18n.libs.iter()) {
+                println!("cargo:rustc-link-lib=dylib={}", lib);
+            }
+
             println!("cargo:rustc-link-lib=dylib=curl");
             println!("cargo:rustc-link-lib=dylib=z");
             println!("cargo:rustc-link-lib=dylib=bz2");

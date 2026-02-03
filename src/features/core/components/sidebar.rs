@@ -63,7 +63,7 @@ impl Component for SideBar {
                             add_css_class: "app-title",
                             set_margin_all: 20,
                             set_xalign: 0.0,
-                            
+
                         },
 
                          gtk::Box {
@@ -154,7 +154,10 @@ impl Component for SideBar {
 impl SideBar {
     fn render_pages_list(widgets: &SideBarWidgets, sender: &ComponentSender<Self>) {
         let listbox = &widgets.pages;
-        let items = [("bibles-symbolic", "Bible"), ("store-symbolic", "store")];
+        let items = [
+            ("bible-read-symbolic", "Study"),
+            ("my-store-symbolic", "store"),
+        ];
 
         for (icon_name, label_text) in items {
             let row_box = gtk::Box::builder()
@@ -191,7 +194,7 @@ impl SideBar {
         listbox.connect_row_activated(move |_, row| {
             library.unselect_all();
 
-            if row.widget_name().as_str() == "Bible" {
+            if row.widget_name().as_str() == "Study" {
                 let _ = sender_clone
                     .output_sender()
                     .send(SidebarMessage::SelectPage(NavigationPage::Bible));
@@ -201,6 +204,10 @@ impl SideBar {
                     .output_sender()
                     .send(SidebarMessage::SelectPage(NavigationPage::Store));
             }
+
+            let _ = sender_clone
+                .output_sender()
+                .send(SidebarMessage::ToggleSidebar);
         });
     }
 
@@ -261,6 +268,9 @@ impl SideBar {
                 .send(SidebarMessage::SelectPage(NavigationPage::Library(
                     row.widget_name().as_str().to_string(),
                 )));
+            let _ = sender_clone
+                .output_sender()
+                .send(SidebarMessage::ToggleSidebar);
         });
     }
 

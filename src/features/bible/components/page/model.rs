@@ -1,14 +1,14 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use std::ffi::CStr;
+use std::{ffi::CStr, sync::Arc};
 use std::os::raw::c_char;
 
 use crate::{
-    features::bible::components::page::helpers::{LexicalInfo, SegmentStyle, Verse, Word},
+    features::{bible::components::page::helpers::{LexicalInfo, SegmentStyle, Verse, Word}, core::module_engine::sword_engine::SwordEngine},
     sword_sys::*,
 };
 
-pub struct StudyPage {
+pub struct BiblePage {
     pub mgr_ptr: isize,
     module: String,
     verses: FactoryVecDeque<Verse>,
@@ -22,8 +22,8 @@ pub enum StudyInput {
 }
 
 #[relm4::component(pub)]
-impl SimpleComponent for StudyPage {
-    type Init = (isize, String);
+impl SimpleComponent for BiblePage {
+    type Init = (Arc<SwordEngine>, String, String);
     type Input = StudyInput;
     type Output = ();
 
@@ -54,14 +54,14 @@ impl SimpleComponent for StudyPage {
     fn init(
         init: Self::Init,
         _root: Self::Root,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let (mgr, module) = init;
+        let (engine, module, query) = init;
         let verse_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let verses = FactoryVecDeque::builder().launch(verse_container).detach();
 
-        let model = StudyPage {
-            mgr_ptr: mgr,
+        let model = BiblePage {
+            mgr_ptr: engine.mgr,
             module: module.clone(),
             verses,
         };
@@ -76,15 +76,10 @@ impl SimpleComponent for StudyPage {
             .valign(gtk::Align::Start)
             .build();
 
-        let entry = gtk::DropDown::builder()
-            .margin_start(20)
-            .margin_top(20)
-            .css_classes(vec!["circular"])
-            .model(&gtk::StringList::new(&[module.as_str()]))
-            .build();
-
-        obox.append(&entry);
+       
         overlay.add_overlay(&obox);
+
+        sender.input( StudyInput::LoadReference(query));
 
         ComponentParts { model, widgets }
     }
@@ -104,7 +99,7 @@ impl SimpleComponent for StudyPage {
     }
 }
 
-impl StudyPage {
+impl BiblePage {
     pub fn load_reference(&mut self, reference: &str) {
         let verses = self.render_content_to_verses(reference);
 

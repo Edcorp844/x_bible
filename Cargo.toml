@@ -32,5 +32,6 @@ relm4-icons = "0.10.1"
 
 [build-dependencies]
 cmake = "0.1.57"
+pkg-config = "0.3.32"
 bindgen = "0.72.1"
 glib-build-tools = "0.21.0"

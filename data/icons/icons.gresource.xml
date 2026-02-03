@@ -6,8 +6,9 @@
         <file preprocess="xml-stripblanks" alias="dictionaries-symbolic.svg">dictionaries.svg</file>
          <file preprocess="xml-stripblanks" alias="map-symbolic.svg">map.svg</file>
          <file preprocess="xml-stripblanks" alias="books-symbolic.svg">books.svg</file>
-         <file preprocess="xml-stripblanks" alias="store-symbolic.svg">store.svg</file>
+         <file preprocess="xml-stripblanks" alias="my-store-symbolic.svg">my-store.svg</file>
         <file preprocess="xml-stripblanks" alias="audio-bible-symbolic.svg">audio-bible.svg</file>
          <file preprocess="xml-stripblanks" alias="bibles-symbolic.svg">bibles.svg</file>
+           <file preprocess="xml-stripblanks" alias="bible-read-symbolic.svg">bible-read.svg</file>
     </gresource>
 </gresources>

@@ -3421,6 +3421,7 @@ dependencies = [
  "hex",
  "libadwaita",
  "libc",
+ "pkg-config",
  "quick-xml",
  "rand",
  "regex",

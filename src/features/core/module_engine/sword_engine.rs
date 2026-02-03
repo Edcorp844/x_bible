@@ -96,121 +96,111 @@ impl SwordEngine {
         self.get_modules_by_category(vec!["Images", "Maps"])
     }
 
-   pub fn get_bible_structure(&self, module_name: &str) -> Vec<ModuleBook> {
-    let mut books: Vec<ModuleBook> = Vec::new();
+    pub fn get_bible_structure(&self, module_name: &str) -> Vec<ModuleBook> {
+        let mut books: Vec<ModuleBook> = Vec::new();
+        let c_mod_name = CString::new(module_name).unwrap();
 
-    let c_mod_name = CString::new(module_name).unwrap();
-
-    unsafe {
-        let h_module =
-            org_crosswire_sword_SWMgr_getModuleByName(self.mgr, c_mod_name.as_ptr());
-        if h_module == 0 {
-            return books;
-        }
-
-        org_crosswire_sword_SWModule_begin(h_module);
-
-        let mut current_book: Option<String> = None;
-        let mut chapters: Vec<ModuleChapter> = Vec::new();
-        let mut current_chapter: i32 = 0;
-        let mut verse_count: usize = 0;
-
-        loop {
-            if org_crosswire_sword_SWModule_popError(h_module) != 0 {
-                break;
+        unsafe {
+            let h_module = org_crosswire_sword_SWMgr_getModuleByName(self.mgr, c_mod_name.as_ptr());
+            if h_module == 0 {
+                return books;
             }
 
-            let key_ptr = org_crosswire_sword_SWModule_getKeyText(h_module);
-            if key_ptr.is_null() {
-                break;
-            }
+            // Reset to start of module
+            org_crosswire_sword_SWModule_begin(h_module);
 
-            let key = CStr::from_ptr(key_ptr).to_string_lossy();
+            let mut current_book_name: Option<String> = None;
+            let mut chapters_accumulator: Vec<ModuleChapter> = Vec::new();
+            let mut current_chapter_num: i32 = 0;
+            let mut verse_count: i32 = 0;
 
-            // Expected: "BookName Chapter:Verse"
-            let mut parts = key.split_whitespace();
-
-            let book = match parts.next() {
-                Some(b) => b.to_string(),
-                None => {
-                    org_crosswire_sword_SWModule_next(h_module);
-                    continue;
+            loop {
+                // Check for end of module
+                if org_crosswire_sword_SWModule_popError(h_module) != 0 {
+                    break;
                 }
-            };
 
-            let chap_verse = match parts.next() {
-                Some(cv) => cv,
-                None => {
-                    org_crosswire_sword_SWModule_next(h_module);
-                    continue;
+                let key_ptr = org_crosswire_sword_SWModule_getKeyText(h_module);
+                if key_ptr.is_null() {
+                    break;
                 }
-            };
 
-            let chapter: i32 = match chap_verse.split(':').next().unwrap().parse() {
-                Ok(c) => c,
-                Err(_) => {
-                    org_crosswire_sword_SWModule_next(h_module);
-                    continue;
+                let key = CStr::from_ptr(key_ptr).to_string_lossy();
+                let mut parts = key.split_whitespace();
+
+                // Handle books with spaces in names (e.g., "1 John")
+                let mut book_part = String::new();
+                let mut chap_verse_part = String::new();
+
+                let all_parts: Vec<&str> = key.split_whitespace().collect();
+                if all_parts.len() >= 2 {
+                    chap_verse_part = all_parts.last().unwrap().to_string();
+                    book_part = all_parts[..all_parts.len() - 1].join(" ");
                 }
-            };
 
-            // ---- Book transition ----
-            if current_book.as_deref() != Some(&book) {
-                if let Some(prev) = current_book.take() {
-                    if verse_count > 0 {
-                        chapters.push(ModuleChapter {
-                            number: current_chapter,
-                            verse_count: verse_count as i32,
+                let chapter: i32 = chap_verse_part
+                    .split(':')
+                    .next()
+                    .and_then(|c| c.parse().ok())
+                    .unwrap_or(0);
+
+                // ---- Book Transition Logic ----
+                if current_book_name.as_deref() != Some(&book_part) {
+                    if let Some(prev_name) = current_book_name.take() {
+                        // Push the last chapter of the PREVIOUS book
+                        if verse_count > 0 {
+                            chapters_accumulator.push(ModuleChapter {
+                                number: current_chapter_num,
+                                verse_count,
+                            });
+                        }
+                        // Push the PREVIOUS book
+                        books.push(ModuleBook {
+                            name: prev_name,
+                            chapters: chapters_accumulator.clone(),
                         });
                     }
-
-                    books.push(ModuleBook {
-                        name: prev,
-                        chapters: chapters.clone(),
-                    });
+                    current_book_name = Some(book_part);
+                    chapters_accumulator.clear();
+                    current_chapter_num = chapter;
+                    verse_count = 0;
                 }
 
-                current_book = Some(book);
-                chapters.clear();
-                current_chapter = 0;
-                verse_count = 0;
+                // ---- Chapter Transition Logic ----
+                if chapter != current_chapter_num {
+                    if verse_count > 0 {
+                        chapters_accumulator.push(ModuleChapter {
+                            number: current_chapter_num,
+                            verse_count,
+                        });
+                    }
+                    current_chapter_num = chapter;
+                    verse_count = 0;
+                }
+
+                verse_count += 1;
+                org_crosswire_sword_SWModule_next(h_module);
             }
 
-            // ---- Chapter transition ----
-            if chapter != current_chapter {
+            // ---- THE FINAL FLUSH (Crucial for Revelation) ----
+            if let Some(last_book_name) = current_book_name {
+                // 1. Push the final chapter (e.g., Revelation 22)
                 if verse_count > 0 {
-                    chapters.push(ModuleChapter {
-                        number: current_chapter,
-                        verse_count: verse_count as i32,
+                    chapters_accumulator.push(ModuleChapter {
+                        number: current_chapter_num,
+                        verse_count,
                     });
                 }
-
-                current_chapter = chapter;
-                verse_count = 0;
-            }
-
-            verse_count += 1;
-            org_crosswire_sword_SWModule_next(h_module);
-        }
-
-        // Flush last book
-        if let Some(book) = current_book {
-            if verse_count > 0 {
-                chapters.push(ModuleChapter {
-                    number: current_chapter,
-                    verse_count: verse_count as i32,
+                // 2. Push the final book (Revelation)
+                books.push(ModuleBook {
+                    name: last_book_name,
+                    chapters: chapters_accumulator,
                 });
             }
-
-            books.push(ModuleBook {
-                name: book,
-                chapters,
-            });
         }
-    }
 
-    books
-}
+        books
+    }
 
     // --- Private Setup Logic ---
 

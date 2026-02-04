@@ -2,7 +2,7 @@ use directories::ProjectDirs;
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -15,38 +15,40 @@ static PROGRESS_COMPLETED: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug)]
 pub struct SwordInner {
     pub mgr: isize,
-    install_mgr: isize,
+    pub install_mgr: isize,
 }
 
 #[derive(Debug)]
 pub struct SwordEngine {
     pub inner: Mutex<SwordInner>,
-    sword_path: PathBuf,
+    pub sword_path: PathBuf,
 }
 
 impl SwordEngine {
     pub fn new() -> Arc<Self> {
         let path = Self::get_sword_path();
+
+        // Pre-create folders BEFORE initializing the C handles
         Self::prepare_app_directory(&path);
 
         let path_str = path.to_string_lossy().replace("\\", "/");
         let c_path = CString::new(path_str.clone()).unwrap();
 
         unsafe {
-            println!("[SwordEngine] Initializing InstallMgr...");
+            println!("[SwordEngine] Initializing InstallMgr at: {}", path_str);
             let install_mgr =
                 org_crosswire_sword_InstallMgr_new(c_path.as_ptr(), Some(Self::status_reporter));
 
+            // Force disclaimer and a baseline sync
             org_crosswire_sword_InstallMgr_setUserDisclaimerConfirmed(install_mgr);
             org_crosswire_sword_InstallMgr_syncConfig(install_mgr);
 
             println!("[SwordEngine] Initializing SWMgr...");
             let mgr = org_crosswire_sword_SWMgr_newWithPath(c_path.as_ptr());
+
             let utf8_key = CString::new("UTF8").unwrap();
             let on_val = CString::new("true").unwrap();
             org_crosswire_sword_SWMgr_setGlobalOption(mgr, utf8_key.as_ptr(), on_val.as_ptr());
-
-            println!("[SwordEngine] Initialization complete");
 
             Arc::new(Self {
                 inner: Mutex::new(SwordInner { mgr, install_mgr }),
@@ -60,15 +62,17 @@ impl SwordEngine {
         total: ::std::os::raw::c_ulong,
         completed: ::std::os::raw::c_ulong,
     ) {
-        PROGRESS_TOTAL.store(total as u64, Ordering::SeqCst);
-        PROGRESS_COMPLETED.store(completed as u64, Ordering::SeqCst);
+        unsafe {
+            PROGRESS_TOTAL.store(total as u64, Ordering::SeqCst);
+            PROGRESS_COMPLETED.store(completed as u64, Ordering::SeqCst);
 
-        if !msg.is_null() {
-            let message = CStr::from_ptr(msg).to_string_lossy();
-            println!(
-                "[SwordEngine] Progress: {}/{} - {}",
-                completed, total, message
-            );
+            if !msg.is_null() {
+                let message = CStr::from_ptr(msg).to_string_lossy();
+                println!(
+                    "[SwordEngine] Progress: {}/{} - {}",
+                    completed, total, message
+                );
+            }
         }
     }
 
@@ -107,90 +111,73 @@ impl SwordEngine {
     }
 
     pub fn fetch_remote_modules(&self, source_name: &str) -> Vec<SwordModule> {
-        println!("\n[Step 1] Locking Engine Inner Mutex...");
+        println!("\n[Step 1] Locking Engine...");
         let mut inner = self.inner.lock().unwrap();
-
         let mut modules = Vec::new();
         let c_source = CString::new(source_name).unwrap();
 
         unsafe {
-            println!("[Step 2] Confirming User Disclaimer for InstallMgr...");
+            // 1. Refresh (Downloads to temp)
             org_crosswire_sword_InstallMgr_setUserDisclaimerConfirmed(inner.install_mgr);
-
-            println!("[Step 3] Refreshing Remote Source: {}...", source_name);
-            let refresh_result = org_crosswire_sword_InstallMgr_refreshRemoteSource(
+            org_crosswire_sword_InstallMgr_refreshRemoteSource(
                 inner.install_mgr,
                 c_source.as_ptr(),
             );
-            println!("[Step 3.1] Refresh result code: {}", refresh_result);
 
-            println!("[Step 4] Syncing InstallMgr Config...");
+            // 2. Sync (Moves from temp to InstallMgr/RemoteSources)
+            println!("[Step 4] Syncing...");
             org_crosswire_sword_InstallMgr_syncConfig(inner.install_mgr);
 
-            println!("[Step 5] Rebuilding SWMgr to recognize new remote files...");
+            // 3. Re-syncing and Re-confirming (Forces the internal cache to update)
+            org_crosswire_sword_InstallMgr_setUserDisclaimerConfirmed(inner.install_mgr);
+            org_crosswire_sword_InstallMgr_syncConfig(inner.install_mgr);
+
+            // --- DEBUG: Physical Check ---
+            let remote_path = self
+                .sword_path
+                .join("InstallMgr")
+                .join("RemoteSources")
+                .join(source_name);
+            println!("[Step 5] Checking physical path: {:?}", remote_path);
+            if remote_path.exists() {
+                if let Ok(entries) = fs::read_dir(&remote_path) {
+                    for entry in entries.flatten() {
+                        println!("[Step 5.1] Found file on disk: {:?}", entry.file_name());
+                    }
+                }
+            } else {
+                println!("[Step 5.2] WARNING: Folder still does not exist on disk!");
+            }
+
             self.rebuild_mgr(&mut inner);
 
-            println!(
-                "[Step 6] Attempting to retrieve module list for '{}'...",
-                source_name
-            );
-            let mut info_ptr = org_crosswire_sword_InstallMgr_getRemoteModInfoList(
+            println!("[Step 6] Final Query...");
+            let info_ptr = org_crosswire_sword_InstallMgr_getRemoteModInfoList(
                 inner.install_mgr,
-                0, // All categories
-                c_source.as_ptr(),
+                0,
+                std::ptr::null(),
             );
 
-            // FALLBACK LOGIC
-            if info_ptr.is_null() {
-                println!(
-                    "[Step 6.1] Named source returned NULL. Attempting Global Fetch (ptr::null)..."
-                );
-                info_ptr = org_crosswire_sword_InstallMgr_getRemoteModInfoList(
-                    inner.install_mgr,
-                    0,
-                    std::ptr::null(), // Requesting all modules from all sources
-                );
-            }
-
-            if info_ptr.is_null() {
-                println!(
-                    "[Step 7] Critical: getRemoteModInfoList still returned NULL. No data found."
-                );
-                return modules;
-            }
-
-            println!("[Step 8] Pointer valid. Iterating through module info structures...");
-            let mut i = 0;
-            loop {
-                let entry = info_ptr.offset(i);
-
-                // Safety check: is the pointer itself or the name field null?
-                if entry.is_null() || (*entry).name.is_null() {
-                    println!("[Step 8.1] Reached end of list at index {}.", i);
-                    break;
+            if !info_ptr.is_null() {
+                let mut i = 0;
+                loop {
+                    let entry = info_ptr.offset(i);
+                    if entry.is_null() || (*entry).name.is_null() {
+                        break;
+                    }
+                    modules.push(SwordModule {
+                        name: self.ptr_to_str((*entry).name),
+                        description: self.ptr_to_str((*entry).description),
+                        category: self.ptr_to_str((*entry).category),
+                        language: self.ptr_to_str((*entry).language),
+                    });
+                    i += 1;
                 }
-
-                let info = *entry;
-                let name = self.ptr_to_str(info.name);
-
-                // Log every 10th module to avoid flooding the console, or just log the count
-                if i % 20 == 0 {
-                    println!("[Step 8.2] Parsing module: {}", name);
-                }
-
-                modules.push(SwordModule {
-                    name,
-                    description: self.ptr_to_str(info.description),
-                    category: self.ptr_to_str(info.category),
-                    language: self.ptr_to_str(info.language),
-                });
-
-                i += 1;
+                println!("[Step 9] SUCCESS: Found {} modules", modules.len());
+            } else {
+                println!("[Step 7] Still NULL. API is failing to read its own files.");
             }
-
-            println!("[Step 9] Successfully processed {} modules.", modules.len());
         }
-
         modules
     }
     // ------------------- LOCAL MODULES -------------------
@@ -211,7 +198,7 @@ impl SwordEngine {
                 ptr = ptr.offset(1);
             }
         }
-        println!("[SwordEngine] Local modules: {}", modules.len());
+        println!("[SwordEngine] Local modules found: {}", modules.len());
         modules
     }
 
@@ -250,7 +237,7 @@ impl SwordEngine {
 
         unsafe {
             println!(
-                "[SwordEngine] Installing module '{}' from '{}'",
+                "[SwordEngine] Installing '{}' from '{}'",
                 module_name, source
             );
             org_crosswire_sword_InstallMgr_setUserDisclaimerConfirmed(inner.install_mgr);
@@ -286,12 +273,10 @@ impl SwordEngine {
             let h_module =
                 org_crosswire_sword_SWMgr_getModuleByName(inner.mgr, c_mod_name.as_ptr());
             if h_module == 0 {
-                println!("[SwordEngine] Module '{}' not found", module_name);
                 return books;
             }
 
             org_crosswire_sword_SWModule_begin(h_module);
-
             let mut current_book: Option<String> = None;
             let mut chapters = Vec::new();
             let mut current_chapter = 0;
@@ -301,7 +286,6 @@ impl SwordEngine {
                 if org_crosswire_sword_SWModule_popError(h_module) != 0 {
                     break;
                 }
-
                 let key_ptr = org_crosswire_sword_SWModule_getKeyText(h_module);
                 if key_ptr.is_null() {
                     break;
@@ -351,11 +335,9 @@ impl SwordEngine {
                     current_chapter = chapter;
                     verse_count = 0;
                 }
-
                 verse_count += 1;
                 org_crosswire_sword_SWModule_next(h_module);
             }
-
             if let Some(last) = current_book {
                 if verse_count > 0 {
                     chapters.push(ModuleChapter {
@@ -369,7 +351,6 @@ impl SwordEngine {
                 });
             }
         }
-
         books
     }
 
@@ -391,13 +372,26 @@ impl SwordEngine {
     }
 
     fn prepare_app_directory(path: &PathBuf) {
+        // 1. Create the fundamental SWORD structure
         let _ = fs::create_dir_all(path.join("mods.d"));
-        let _ = fs::create_dir_all(path.join("InstallMgr"));
+        let _ = fs::create_dir_all(path.join("modules"));
+
+        // 2. CRITICAL: Create the specific folder the InstallMgr uses for Remote Sources
+        // If this isn't here, the 'syncConfig' download has nowhere to land.
+        let remote_sources = path
+            .join("InstallMgr")
+            .join("RemoteSources")
+            .join("CrossWire");
+        let _ = fs::create_dir_all(&remote_sources);
+
+        let abs_path_str = path.to_string_lossy().replace("\\", "/");
         let conf_path = path.join("sword.conf");
-        if !conf_path.exists() {
-            if let Ok(mut file) = fs::File::create(conf_path) {
-                let config = r#"[Globals]
-DataPath=./
+
+        // Use the absolute path for DataPath.
+        // We remove the #[wrap] logic here as per your permanent fix requirements.
+        let config = format!(
+            r#"[Globals]
+DataPath={}
 [Install]
 Disclaimer=Confirmed
 [Repos]
@@ -406,9 +400,12 @@ Description=CrossWire HTTP
 Protocol=HTTP
 Source=www.crosswire.org
 Directory=/ftpmirror/pub/sword/raw
-"#;
-                let _ = writeln!(file, "{}", config);
-            }
+"#,
+            abs_path_str
+        );
+
+        if let Ok(mut file) = fs::File::create(conf_path) {
+            let _ = writeln!(file, "{}", config);
         }
     }
 }
@@ -417,10 +414,9 @@ impl Drop for SwordEngine {
     fn drop(&mut self) {
         let inner = self.inner.lock().unwrap();
         unsafe {
-            println!("[SwordEngine] Dropping SWMgr and InstallMgr...");
+            println!("[SwordEngine] Cleaning up SWORD handles...");
             org_crosswire_sword_InstallMgr_delete(inner.install_mgr);
             org_crosswire_sword_SWMgr_delete(inner.mgr);
-            println!("[SwordEngine] Dropped successfully");
         }
     }
 }

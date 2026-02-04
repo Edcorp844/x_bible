@@ -11,11 +11,11 @@ pub enum AddedWordStyle {
 
 impl Word {
     pub fn build_widget(&self, added_style: AddedWordStyle) -> gtk::Widget {
-        if self.is_punctuation {
+        /*if self.is_punctuation {
             print!("{} {:?}", self.text, self.style);
         } else {
             print!(" {}", self.text);
-        }
+        }*/
         // Main wrapper for each word
         let wrapper = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)

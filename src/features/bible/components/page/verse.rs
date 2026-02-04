@@ -82,7 +82,7 @@ impl FactoryComponent for Verse {
             .hexpand(true)
             .halign(gtk::Align::Start)
             .build();
-        print!("\n{} ", self.number);
+       // print!("\n{} ", self.number);
         for word in self.notes.clone() {
             let note_label = gtk::Label::builder()
                 .wrap(true)

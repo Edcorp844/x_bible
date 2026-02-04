@@ -7,12 +7,14 @@ use crate::features::core::{
     module_engine::sword_engine::SwordEngine,
     pages::{
         library::library_page::{LibraryPage, LibraryPageCategory, LibraryPageOutput},
+        store::store_page::{StorePageOutput, StorePage},
         study::study_page::{StudyPage, StudyPageOutPut},
     },
 };
 
 enum PageController {
     Bible(Controller<StudyPage>),
+    Store(Controller<StorePage>),
     Library(Controller<LibraryPage>),
 }
 
@@ -20,6 +22,7 @@ impl PageController {
     fn widget(&self) -> &adw::NavigationPage {
         match self {
             Self::Bible(c) => c.widget(),
+            Self::Store(c) => c.widget(),
             Self::Library(c) => c.widget(),
         }
     }
@@ -82,7 +85,7 @@ impl SimpleComponent for AppModel {
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let engine = Arc::new(SwordEngine::new());
+        let engine = SwordEngine::new();
 
         let side_bar = SideBar::builder()
             .launch(())
@@ -123,7 +126,6 @@ impl SimpleComponent for AppModel {
                 self.is_sidebar_visible = !self.is_sidebar_visible;
             }
             AppInputMessage::SetSidebarVisibility(visible) => {
-                // Only update if the state actually changed to prevent loops
                 if self.is_sidebar_visible != visible {
                     self.is_sidebar_visible = visible;
                 }
@@ -160,7 +162,16 @@ impl SimpleComponent for AppModel {
                             self.pages_cache
                                 .insert(key.clone(), PageController::Library(libarary_page));
                         }
-                        _ => {}
+                        NavigationPage::Store => {
+                            let store_page = StorePage::builder()
+                                .launch((self.engine.clone(), self.is_sidebar_visible))
+                                .forward(sender.input_sender(), |message| match message {
+                                    StorePageOutput::ToggleSidebar => AppInputMessage::ToggleSidebar,
+                                });
+
+                            self.pages_cache
+                                .insert(key.clone(), PageController::Store(store_page));
+                        }
                     }
                 }
 

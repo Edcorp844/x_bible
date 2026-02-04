@@ -1,10 +1,13 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use std::{ffi::CStr, sync::Arc};
 use std::os::raw::c_char;
+use std::{ffi::CStr, sync::Arc};
 
 use crate::{
-    features::{bible::components::page::helpers::{LexicalInfo, SegmentStyle, Verse, Word}, core::module_engine::sword_engine::SwordEngine},
+    features::{
+        bible::components::page::helpers::{LexicalInfo, SegmentStyle, Verse, Word},
+        core::module_engine::sword_engine::SwordEngine,
+    },
     sword_sys::*,
 };
 
@@ -60,8 +63,10 @@ impl SimpleComponent for BiblePage {
         let verse_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let verses = FactoryVecDeque::builder().launch(verse_container).detach();
 
+        let mgr_ptr = engine.inner.lock().unwrap().mgr;
+
         let model = BiblePage {
-            mgr_ptr: engine.mgr,
+            mgr_ptr,
             module: module.clone(),
             verses,
         };
@@ -76,10 +81,9 @@ impl SimpleComponent for BiblePage {
             .valign(gtk::Align::Start)
             .build();
 
-       
         overlay.add_overlay(&obox);
 
-        sender.input( StudyInput::LoadReference(query));
+        sender.input(StudyInput::LoadReference(query));
 
         ComponentParts { model, widgets }
     }
@@ -184,7 +188,7 @@ impl BiblePage {
                     None => break,
                 };
 
-                println!("HTML: {}", html);
+                // println!("HTML: {}", html);
                 let words = self.parse_single_verse_html(&html);
 
                 verses.push(Verse {

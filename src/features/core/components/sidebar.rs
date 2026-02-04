@@ -156,7 +156,7 @@ impl SideBar {
         let listbox = &widgets.pages;
         let items = [
             ("bible-read-symbolic", "Study"),
-            ("my-store-symbolic", "store"),
+            ("my-store-symbolic", "Store"),
         ];
 
         for (icon_name, label_text) in items {

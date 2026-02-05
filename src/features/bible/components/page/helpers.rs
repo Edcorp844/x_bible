@@ -23,6 +23,7 @@ pub struct LexicalInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Word {
     pub text: String,
+
     pub style: SegmentStyle,
     pub is_red: bool,
     pub is_italic: bool,
@@ -30,6 +31,7 @@ pub struct Word {
 
     /// Lexicon & dictionary hooks
     pub lex: Option<LexicalInfo>,
+    pub note: Option<String>,
 
     /// Grouping flags (for Added / RedLetter spans)
     pub is_first_in_group: bool,

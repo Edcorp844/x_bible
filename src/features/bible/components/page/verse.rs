@@ -36,7 +36,6 @@ impl FactoryComponent for Verse {
                     set_line_spacing: 12,
                     set_hexpand: true,
                     set_halign: gtk::Align::Start,
-                    //set_margin_start: if self.is_paragraph_start { 40 } else { 0 },
                 },
 
 
@@ -68,21 +67,18 @@ impl FactoryComponent for Verse {
             .halign(gtk::Align::Start)
             .build();
 
-        // Populate words directly (no factory)
         for word in &self.words {
-            let word = word.build_widget(AddedWordStyle::Brackets);
+            let word = word.build_widget(AddedWordStyle::Italic);
 
             word_flow_box.append(&word);
         }
 
-        // 🔑 This is the injection point the macro expects
         let word_flow = &word_flow_box;
         let notes_container = adw::WrapBox::builder()
             .line_spacing(6)
             .hexpand(true)
             .halign(gtk::Align::Start)
             .build();
-       // print!("\n{} ", self.number);
         for word in self.notes.clone() {
             let note_label = gtk::Label::builder()
                 .wrap(true)

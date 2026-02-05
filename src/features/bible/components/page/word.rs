@@ -11,17 +11,14 @@ pub enum AddedWordStyle {
 
 impl Word {
     pub fn build_widget(&self, added_style: AddedWordStyle) -> gtk::Widget {
-        /*if self.is_punctuation {
-            print!("{} {:?}", self.text, self.style);
-        } else {
-            print!(" {}", self.text);
-        }*/
         // Main wrapper for each word
         let wrapper = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
+            .orientation(gtk::Orientation::Vertical)
             .spacing(2)
             .halign(gtk::Align::Start)
             .build();
+
+        println!(" {} {:?}", self.text, self.style);
 
         // The word label
         let label = gtk::Label::builder()
@@ -35,13 +32,26 @@ impl Word {
         label.set_markup(&self.render_word(added_style));
         wrapper.append(&label);
 
+        if let Some(note) = &self.note {
+            let strong_label = gtk::Label::builder()
+                .use_markup(true)
+                .hexpand(false)
+                .css_classes(["bible-text", "lexical"])
+                .xalign(0.0)
+                .margin_end(8)
+                .margin_start(4)
+                .build();
+
+            let cleaned = format!("<span color='#d71452'>{}</span>", note);
+
+            strong_label.set_markup(&cleaned);
+            wrapper.append(&strong_label);
+            wrapper.add_css_class("word-wrapper");
+        }
+
         // Optional Strong's reference (lexical info)
-         if let Some(lex) = self.lex.as_ref() {
-            if let Some(lema) = lex.lemma.clone(){
-                println!("Lemma: {lema}");
-            }
-         }
-          /*   if !lex.strongs.is_empty() {
+        if let Some(lex) = self.lex.as_ref() {
+            if !lex.strongs.is_empty() {
                 let strong_label = gtk::Label::builder()
                     .use_markup(true)
                     .hexpand(false)
@@ -54,10 +64,7 @@ impl Word {
                 let joined = lex
                     .strongs
                     .iter()
-                    .map(|s| {
-                        print!(" {}", s);
-                        format!("<span color='#1086ed'>{}</span>", s)
-                    })
+                    .map(|s| format!("<span size='small' color='#1086ed'>{}</span>", s))
                     .collect::<Vec<_>>()
                     .join(" ");
 
@@ -76,14 +83,13 @@ impl Word {
                     .margin_start(4)
                     .build();
 
-                let cleaned = format!("<span color='#c110ed'>{}</span>", lemma);
-                print!(" {}", lemma);
+                let cleaned = format!("<span  size='small' color='#ed10a3'>{}</span>", lemma);
 
                 strong_label.set_markup(&cleaned);
                 wrapper.append(&strong_label);
                 wrapper.add_css_class("word-wrapper");
             }
-        }*/
+        }
 
         wrapper.upcast()
     }
@@ -133,6 +139,7 @@ impl Default for Word {
 
             is_first_in_group: false,
             is_last_in_group: false,
+            note: None,
         }
     }
 }

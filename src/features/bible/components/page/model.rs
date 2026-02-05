@@ -158,12 +158,12 @@ impl BiblePage {
                     None => break,
                 };
 
-                // Debug print as requested
-                println!("[{}], {}/n", key, raw_osis);
+                // Debug print raw OSIS
+                println!("[+] {}\n", raw_osis);
 
                 let (mut words, notes) = self.parse_osis_content(&raw_osis);
 
-                // Finalize groups (e.g., first/last word in a Red Letter span)
+                // Apply grouping markers (brackets for Added, potential spans for Red)
                 self.apply_group_metadata(&mut words);
 
                 verses.push(Verse {
@@ -190,18 +190,17 @@ impl BiblePage {
         let mut words = Vec::new();
         let mut verse_notes = Vec::new();
 
-        // Pass 1: Recursive walk to build the word list with inherited styles
         self.walk_osis(
             fragment.tree.root(),
             &mut words,
             &mut Vec::new(),
             None,
             false, // is_red (Jesus block)
-            false, // is_added (Italics)
+            false, // is_added (Theological status)
+            false, // is_italic (General style)
             false, // is_inside_note
         );
 
-        // Pass 2: Extract notes and Cross-References
         let note_selector = scraper::Selector::parse("note").unwrap();
         let catch_selector = scraper::Selector::parse("catchWord").unwrap();
 
@@ -209,11 +208,8 @@ impl BiblePage {
             let el = note_node.value();
             let note_type = el.attr("type").unwrap_or("");
             let osis_ref = el.attr("osisRef").unwrap_or("");
-
-            // Build the note text
             let full_note_text = note_node.text().collect::<Vec<_>>().join(" ");
 
-            // Handle Cross References explicitly
             if note_type == "crossReference" || !osis_ref.is_empty() {
                 let cross_ref_data = if !osis_ref.is_empty() {
                     format!("[Cross-Ref: {}] {}", osis_ref, full_note_text)
@@ -224,7 +220,6 @@ impl BiblePage {
                 continue;
             }
 
-            // Word-specific notes (CatchWord)
             if let Some(catch_node) = note_node.select(&catch_selector).next() {
                 let clean_catch = catch_node
                     .text()
@@ -249,7 +244,6 @@ impl BiblePage {
                 verse_notes.push(full_note_text);
             }
         }
-
         (words, verse_notes)
     }
 
@@ -261,6 +255,7 @@ impl BiblePage {
         parent_lex: Option<LexicalInfo>,
         is_red: bool,
         is_added: bool,
+        is_italic: bool,
         is_inside_note: bool,
     ) {
         use scraper::node::Node;
@@ -273,17 +268,14 @@ impl BiblePage {
                         for piece in text.split_whitespace() {
                             words.push(Word {
                                 text: piece.to_string(),
-                                // If inside Jesus block, style is RedLetter.
-                                // If Added is nested inside Jesus block, it stays Red but keeps italic flag.
+                                // This determines if we see "Plain" or "Added" in your debug
                                 style: if is_added {
                                     SegmentStyle::Added
-                                } else if is_red {
-                                    SegmentStyle::RedLetter
                                 } else {
                                     SegmentStyle::Plain
                                 },
                                 is_red,
-                                is_italic: is_added,
+                                is_italic,
                                 is_bold_text: false,
                                 lex: parent_lex.clone(),
                                 note: None,
@@ -296,9 +288,11 @@ impl BiblePage {
                 }
             }
             Node::Element(el) => {
+                // Inheritance: start with the parent's state
                 let mut current_lex = parent_lex.clone();
                 let mut active_red = is_red;
                 let mut active_added = is_added;
+                let mut active_italic = is_italic;
                 let mut active_note = is_inside_note;
 
                 match el.name() {
@@ -306,7 +300,6 @@ impl BiblePage {
                         let raw_lemma = el.attr("lemma").unwrap_or("");
                         let raw_morph = el.attr("morph").unwrap_or("");
 
-                        // Handle Strong's vs Lemma text
                         let strongs: Vec<String> = raw_lemma
                             .split_whitespace()
                             .filter(|s| s.starts_with("strong:"))
@@ -321,17 +314,27 @@ impl BiblePage {
                         current_lex = Some(LexicalInfo {
                             strongs,
                             lemma: tr_lemma,
-                            morph: Some(raw_morph.to_string()),
+                            morph: Some(self.decode_morph(raw_morph)),
                             ..Default::default()
                         });
                     }
-                    "q" if el.attr("who") == Some("Jesus") => active_red = true,
-                   // <transChange type="added">was</transChange>
-                    "transChange" if el.attr("type") == Some("added") => active_added = true,
-                    "note" => active_note = true,
+                    "q" if el.attr("who") == Some("Jesus") => {
+                        active_red = true;
+                    }
+                    "transChange" if el.attr("type") == Some("added") => {
+                        active_added = true;
+                        //active_italic = true;
+                    }
+                    "hi" if el.attr("type") == Some("italic") => {
+                        active_italic = true;
+                    }
+                    "note" => {
+                        active_note = true;
+                    }
                     _ => {}
                 }
 
+                // Recurse into children with the UPDATED state
                 for child in node.children() {
                     self.walk_osis(
                         child,
@@ -340,11 +343,13 @@ impl BiblePage {
                         current_lex.clone(),
                         active_red,
                         active_added,
+                        active_italic,
                         active_note,
                     );
                 }
             }
             _ => {
+                // For non-elements/non-text, just pass the state through
                 for child in node.children() {
                     self.walk_osis(
                         child,
@@ -353,6 +358,7 @@ impl BiblePage {
                         parent_lex.clone(),
                         is_red,
                         is_added,
+                        is_italic,
                         is_inside_note,
                     );
                 }
@@ -365,22 +371,41 @@ impl BiblePage {
         if len == 0 {
             return;
         }
+
         for i in 0..len {
-            // Mark Red Letter boundaries
-            if words[i].is_red {
-                if i == 0 || !words[i - 1].is_red {
+            // 1. Check for Added words (Theological status)
+            if words[i].style == SegmentStyle::Added {
+                let is_prev_added = if i > 0 {
+                    words[i - 1].style == SegmentStyle::Added
+                } else {
+                    false
+                };
+                let is_next_added = if i < len - 1 {
+                    words[i + 1].style == SegmentStyle::Added
+                } else {
+                    false
+                };
+
+                if !is_prev_added {
                     words[i].is_first_in_group = true;
                 }
-                if i == len - 1 || !words[i + 1].is_red {
+                if !is_next_added {
                     words[i].is_last_in_group = true;
                 }
             }
-            // Mark Added word boundaries
-            if words[i].style == SegmentStyle::Added {
-                if i == 0 || words[i - 1].style != SegmentStyle::Added {
+            // 2. Check for Jesus words (is_red) ONLY if not already marked by an Added group
+            else if words[i].is_red {
+                let is_prev_red = if i > 0 { words[i - 1].is_red } else { false };
+                let is_next_red = if i < len - 1 {
+                    words[i + 1].is_red
+                } else {
+                    false
+                };
+
+                if !is_prev_red {
                     words[i].is_first_in_group = true;
                 }
-                if i == len - 1 || words[i + 1].style != SegmentStyle::Added {
+                if !is_next_red {
                     words[i].is_last_in_group = true;
                 }
             }
@@ -394,10 +419,53 @@ impl BiblePage {
             .unwrap_or(0)
     }
 
+    fn decode_morph(&self, morph: &str) -> String {
+        let code = morph.split(':').last().unwrap_or(morph);
+        let mut parts = Vec::new();
+
+        let chars: Vec<char> = code.chars().collect();
+        if chars.is_empty() {
+            return code.to_string();
+        }
+
+        // First char: Part of Speech
+        match chars[0] {
+            'N' => parts.push("Noun"),
+            'V' => parts.push("Verb"),
+            'A' => parts.push("Adjective"),
+            'R' => parts.push("Pronoun"),
+            'D' => parts.push("Adverb"),
+            'P' => parts.push("Preposition"),
+            'C' => parts.push("Conjunction"),
+            'I' => parts.push("Interjection"),
+            _ => {}
+        }
+
+        // This is a simplified logic - Robinson's codes are positional.
+        // Example: N-DSM -> Noun, Dative, Singular, Masculine
+        for c in chars.iter().skip(1) {
+            match c {
+                '-' => continue,
+                'N' => parts.push("Nominative"),
+                'G' => parts.push("Genitive"),
+                'D' => parts.push("Dative"),
+                'A' => parts.push("Accusative"),
+                'S' => parts.push("Singular"),
+                'P' => parts.push("Plural"),
+                'M' => parts.push("Masculine"),
+                'F' => parts.push("Feminine"),
+                'N' if parts.contains(&"Noun") => parts.push("Neuter"),
+                _ => {}
+            }
+        }
+
+        parts.join(", ")
+    }
+
     unsafe fn sword_ptr_to_string(&self, ptr: *const std::os::raw::c_char) -> Option<String> {
         if ptr.is_null() {
             return None;
         }
-        Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
+        Some(unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() })
     }
 }

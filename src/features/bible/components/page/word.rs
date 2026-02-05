@@ -18,7 +18,7 @@ impl Word {
             .halign(gtk::Align::Start)
             .build();
 
-        println!(" {} {:?}", self.text, self.style);
+       // println!(" {} {:?}", self.text, self.style);
 
         // The word label
         let label = gtk::Label::builder()
@@ -89,6 +89,25 @@ impl Word {
                 wrapper.append(&strong_label);
                 wrapper.add_css_class("word-wrapper");
             }
+
+            /*  if let Some(morph) = lex.morph.clone() {
+                println!("{morph}");
+                let strong_label = gtk::Label::builder()
+                    .use_markup(true)
+                    .hexpand(false)
+                    .css_classes(["bible-text", "lexical"])
+                    .xalign(0.0)
+                    .margin_end(8)
+                    .margin_start(4)
+                    .build();
+
+                let cleaned = format!("<span  size='small' color='#6110ed'>{}</span>", morph);
+
+                strong_label.set_markup(&cleaned);
+                wrapper.append(&strong_label);
+                wrapper.add_css_class("word-wrapper");
+            }
+            */
         }
 
         wrapper.upcast()

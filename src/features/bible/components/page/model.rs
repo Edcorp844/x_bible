@@ -46,6 +46,7 @@ impl SimpleComponent for BiblePage {
                     set_vexpand: true,
                     add_css_class: "page-overlay",
 
+                    // 1. BASE LAYER: Bible Text
                     gtk::ScrolledWindow {
                         set_vexpand: true,
                         set_hscrollbar_policy: gtk::PolicyType::Never,
@@ -57,17 +58,17 @@ impl SimpleComponent for BiblePage {
                         },
                     },
 
-                    // 2. MIDDLE LAYER: The Dimming Scrim
+                    // 2. MIDDLE LAYER: Dimming Scrim
+                    #[name = "dim_scrim"]
                     add_overlay = &gtk::Box {
                         add_css_class: "dim-scrim",
-                        #[watch]
-                        set_visible: options_revealer.reveals_child(),
+                        set_visible: false,
                         set_can_target: false,
                     },
 
                     // 3. TOP LAYER: The Morphing Menu
                     #[name = "overlay_container"]
-                    add_overlay =  &gtk::Box {
+                    add_overlay = &gtk::Box {
                         add_css_class: "floating-menu-anchor",
                         set_halign: gtk::Align::End,
                         set_valign: gtk::Align::End,
@@ -77,7 +78,6 @@ impl SimpleComponent for BiblePage {
                             set_orientation: gtk::Orientation::Vertical,
                             add_css_class: "page-menu-card",
                             add_css_class: "osd",
-                            // Force the box to be only as wide as its current visible content
                             set_halign: gtk::Align::End,
 
                             gtk::Overlay {
@@ -86,14 +86,15 @@ impl SimpleComponent for BiblePage {
                                 gtk::Revealer {
                                     set_transition_type: gtk::RevealerTransitionType::SlideUp,
                                     set_transition_duration: 350,
+                                    set_visible: false, // Hidden initially for circularity
 
                                     gtk::Box {
                                         set_orientation: gtk::Orientation::Vertical,
                                         set_spacing: 15,
                                         set_margin_all: 15,
-                                        // This defines the width ONLY when revealed
                                         set_width_request: 250,
 
+                                        // Font Controls
                                         gtk::Box {
                                             set_spacing: 12,
                                             gtk::Image { set_icon_name: Some("font-x-generic-symbolic") },
@@ -101,39 +102,28 @@ impl SimpleComponent for BiblePage {
                                                 set_hexpand: true,
                                                 add_css_class: "accent",
                                             },
-                                            gtk::Image { set_icon_name: Some("format-text-larger-symbolic") },
+                                            gtk::Image { set_icon_name: Some("font-size-increase-symbolic") },
                                         },
 
+                                        // Toggles
                                         gtk::Box {
-                                            set_orientation: gtk::Orientation::Vertical,
                                             set_spacing: 8,
                                             set_homogeneous: true,
-
-                                            // 1. Strongs Toggle
                                             gtk::CheckButton {
                                                 set_label: Some("Strongs"),
-                                                // "pill" or "outline" usually looks better than "circular" for checkbuttons
-                                                add_css_class: "pill", 
+                                                add_css_class: "pill",
                                                 connect_toggled[sender] => move |btn| {
-                                                    let msg = if btn.is_active() { 
-                                                        VerseInputMessage::EnableStrongs 
-                                                    } else { 
-                                                        VerseInputMessage::DisableStrongs 
-                                                    };
+                                                    let msg = if btn.is_active() { VerseInputMessage::EnableStrongs }
+                                                              else { VerseInputMessage::DisableStrongs };
                                                     sender.input(StudyInput::ToggleDisplay(msg));
                                                 }
                                             },
-
-                                            // 2. Notes Toggle
                                             gtk::CheckButton {
                                                 set_label: Some("Notes"),
                                                 add_css_class: "pill",
                                                 connect_toggled[sender] => move |btn| {
-                                                    let msg = if btn.is_active() { 
-                                                        VerseInputMessage::EnableNotes 
-                                                    } else { 
-                                                        VerseInputMessage::DisableNotes 
-                                                    };
+                                                    let msg = if btn.is_active() { VerseInputMessage::EnableNotes }
+                                                              else { VerseInputMessage::DisableNotes };
                                                     sender.input(StudyInput::ToggleDisplay(msg));
                                                 }
                                             },
@@ -141,28 +131,20 @@ impl SimpleComponent for BiblePage {
                                     }
                                 },
 
-                                // The FAB Button
+                                // The FAB Button (Placed perfectly in the center of the circle)
+                                #[name = "menu_button"]
                                 add_overlay = &gtk::Button {
                                     add_css_class: "circular",
                                     add_css_class: "liquid-trigger",
                                     set_has_frame: false,
                                     set_width_request: 64,
                                     set_height_request: 64,
-                                    // Center it so the circle doesn't move when the menu expands
                                     set_halign: gtk::Align::Center,
-                                    set_valign: gtk::Align::End,
-
-                                    #[watch]
-                                    set_visible: !options_revealer.reveals_child(),
-                                    set_opacity: if options_revealer.reveals_child() { 0.0 } else { 1.0 },
+                                    set_valign: gtk::Align::Center,
 
                                     gtk::Image {
-                                        set_icon_name: Some("text-size-info-symbolic"),
+                                        set_icon_name: Some("font-x-generic-symbolic"),
                                         set_pixel_size: 24,
-                                    },
-                                    connect_clicked[options_revealer] => move |_| {
-                                        let is_on = options_revealer.reveals_child();
-                                        options_revealer.set_reveal_child(!is_on);
                                     }
                                 }
                             }
@@ -190,35 +172,65 @@ impl SimpleComponent for BiblePage {
         };
 
         let verse_list = model.verses.widget();
+        
         let widgets = view_output!();
-
-        // --- HOVER LOGIC ---
         let motion = gtk::EventControllerMotion::new();
 
-        // Create a local reference for the macro to capture
+        // --- THE GOOD LOGIC ---
         let options_revealer = &widgets.options_revealer;
+        let dim_scrim = &widgets.dim_scrim;
+        let menu_button = &widgets.menu_button;
 
-        // Fixed macro syntax: comma after the capture list
         motion.connect_enter(clone!(
             #[weak]
             options_revealer,
+            #[weak]
+            dim_scrim,
+            #[weak]
+            menu_button,
             move |_, _, _| {
+                // Show the layout container for the menu
+                options_revealer.set_visible(true);
                 options_revealer.set_reveal_child(true);
+
+                // Dim the background
+                dim_scrim.set_visible(true);
+
+                // Hide the FAB button so it doesn't overlap the menu content
+                menu_button.set_opacity(0.0);
+                menu_button.set_can_target(false);
             }
         ));
 
         motion.connect_leave(clone!(
             #[weak]
             options_revealer,
+            #[weak]
+            dim_scrim,
+            #[weak]
+            menu_button,
             move |_| {
+                // Start closing animation
                 options_revealer.set_reveal_child(false);
+                dim_scrim.set_visible(false);
+
+                // Restore the FAB button
+                menu_button.set_opacity(1.0);
+                menu_button.set_can_target(true);
             }
         ));
+
+        // CRITICAL: Only set_visible(false) AFTER the slide-down is done.
+        // This ensures the button returns to a perfect circle smoothly.
+        options_revealer.connect_child_revealed_notify(move |rev| {
+            if !rev.reveals_child() && !rev.is_child_revealed() {
+                rev.set_visible(false);
+            }
+        });
 
         widgets.overlay_container.add_controller(motion);
 
         sender.input(StudyInput::LoadReference(query));
-
         ComponentParts { model, widgets }
     }
 
@@ -228,7 +240,6 @@ impl SimpleComponent for BiblePage {
             StudyInput::SelectStrong(_) => {}
             StudyInput::SetModule(name) => self.module = name,
             StudyInput::ToggleDisplay(factory_msg) => {
-                // Broadcast the toggle to every verse in the factory
                 for i in 0..self.verses.len() {
                     self.verses.send(i, factory_msg.clone());
                 }

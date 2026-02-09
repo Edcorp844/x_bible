@@ -3416,6 +3416,7 @@ dependencies = [
  "directories",
  "dotenv",
  "ego-tree",
+ "glib",
  "glib-build-tools",
  "gtk4",
  "hex",

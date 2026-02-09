@@ -1,7 +1,10 @@
 use adw::prelude::*;
 use relm4::prelude::*;
 
-use crate::features::bible::components::page::helpers::{SegmentStyle, Word};
+use crate::features::bible::components::page::{
+    helpers::{SegmentStyle, Word},
+    verse::DisplayConfig,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AddedWordStyle {
@@ -10,17 +13,19 @@ pub enum AddedWordStyle {
 }
 
 impl Word {
-    pub fn build_widget(&self, added_style: AddedWordStyle) -> gtk::Widget {
-        // Main wrapper for each word
+    pub fn build_widget(&self, added_style: AddedWordStyle, config: DisplayConfig) -> gtk::Widget {
         let wrapper = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(2)
             .halign(gtk::Align::Start)
             .build();
 
-       // println!(" {} {:?}", self.text, self.style);
+        let word_wrapper = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(2)
+            .halign(gtk::Align::Start)
+            .build();
 
-        // The word label
         let label = gtk::Label::builder()
             .use_markup(true)
             .hexpand(false)
@@ -30,28 +35,67 @@ impl Word {
             .build();
 
         label.set_markup(&self.render_word(added_style));
-        wrapper.append(&label);
+        word_wrapper.append(&label);
 
-        if let Some(note) = &self.note {
-            let strong_label = gtk::Label::builder()
+        wrapper.append(&word_wrapper);
+
+        if let Some(note_content) = &self.note {
+            let note_label = gtk::Label::builder()
                 .use_markup(true)
                 .hexpand(false)
-                .css_classes(["bible-text", "lexical"])
                 .xalign(0.0)
-                .margin_end(8)
-                .margin_start(4)
                 .build();
 
-            let cleaned = format!("<span color='#d71452'>{}</span>", note);
+            note_label.set_markup("<span color='#d71452' size='x-small'><i>n*</i></span>");
 
-            strong_label.set_markup(&cleaned);
-            wrapper.append(&strong_label);
-            wrapper.add_css_class("word-wrapper");
+            // --- CURSOR FIX ---
+            let motion = gtk::EventControllerMotion::new();
+            motion.connect_enter(|motion, _, _| {
+                let widget = motion.widget().unwrap();
+                // Set the cursor to "pointer" (the hand icon)
+                widget.set_cursor_from_name(Some("pointer"));
+            });
+
+            motion.connect_leave(|motion| {
+                let widget = motion.widget().unwrap();
+                // Reset the cursor when leaving
+                widget.set_cursor(None);
+            });
+
+            note_label.add_controller(motion);
+
+            // --- POPUP LOGIC ---
+            let popover = gtk::Popover::builder()
+                .css_classes(["bible-note-popover"])
+                .autohide(true)
+                .build();
+
+            let popover_label = gtk::Label::builder()
+                .wrap(true)
+                .max_width_chars(30)
+                .margin_top(5)
+                .margin_bottom(5)
+                .margin_start(5)
+                .margin_end(5)
+                .build();
+
+            popover_label
+                .set_markup(format!("<span color='#d71452'>{note_content}</span>").as_str());
+            popover.set_child(Some(&popover_label));
+            popover.set_parent(&note_label);
+
+            let click = gtk::GestureClick::new();
+            let p_clone = popover.clone();
+            click.connect_released(move |_, _, _, _| {
+                p_clone.popup();
+            });
+
+            note_label.add_controller(click);
+            word_wrapper.append(&note_label);
         }
 
-        // Optional Strong's reference (lexical info)
         if let Some(lex) = self.lex.as_ref() {
-            if !lex.strongs.is_empty() {
+            if config.show_strongs && !lex.strongs.is_empty() {
                 let strong_label = gtk::Label::builder()
                     .use_markup(true)
                     .hexpand(false)
@@ -86,11 +130,13 @@ impl Word {
                 let cleaned = format!("<span  size='small' color='#ed10a3'>{}</span>", lemma);
 
                 strong_label.set_markup(&cleaned);
-                wrapper.append(&strong_label);
-                wrapper.add_css_class("word-wrapper");
+                if config.show_lemma {
+                    wrapper.append(&strong_label);
+                    wrapper.add_css_class("word-wrapper");
+                }
             }
 
-            /*  if let Some(morph) = lex.morph.clone() {
+            if let Some(morph) = lex.morph.clone() {
                 println!("{morph}");
                 let strong_label = gtk::Label::builder()
                     .use_markup(true)
@@ -104,10 +150,12 @@ impl Word {
                 let cleaned = format!("<span  size='small' color='#6110ed'>{}</span>", morph);
 
                 strong_label.set_markup(&cleaned);
-                wrapper.append(&strong_label);
-                wrapper.add_css_class("word-wrapper");
+
+                if config.show_morphs {
+                    wrapper.append(&strong_label);
+                    wrapper.add_css_class("word-wrapper");
+                }
             }
-            */
         }
 
         wrapper.upcast()

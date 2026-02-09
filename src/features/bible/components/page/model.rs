@@ -1,9 +1,12 @@
 use adw::prelude::*;
 use ego_tree::NodeRef;
+use gtk::glib::clone;
 use relm4::prelude::*;
-use std::os::raw::c_char;
-use std::{ffi::CStr, sync::Arc};
+use std::sync::Arc;
 
+use crate::features::bible::components::page::verse::{
+    DisplayConfig, VerseInputMessage, VerseModel,
+};
 use crate::{
     features::{
         bible::components::page::helpers::{LexicalInfo, SegmentStyle, Verse, Word},
@@ -11,11 +14,10 @@ use crate::{
     },
     sword_sys::*,
 };
-
 pub struct BiblePage {
     pub mgr_ptr: isize,
     module: String,
-    verses: FactoryVecDeque<Verse>,
+    verses: FactoryVecDeque<VerseModel>,
 }
 
 #[derive(Debug)]
@@ -23,6 +25,8 @@ pub enum StudyInput {
     LoadReference(String),
     SelectStrong(String),
     SetModule(String),
+    /// Sends a toggle message to all verses in the factory
+    ToggleDisplay(VerseInputMessage),
 }
 
 #[relm4::component(pub)]
@@ -36,19 +40,132 @@ impl SimpleComponent for BiblePage {
             #[wrap(Some)]
             set_child = &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
-                gtk::ScrolledWindow {
+
+                #[name="page_overlay"]
+                gtk::Overlay {
                     set_vexpand: true,
-                    set_hscrollbar_policy: gtk::PolicyType::Never,
+                    add_css_class: "page-overlay",
 
-                    #[name="page_overlay"]
-                    gtk::Overlay {
-                        add_css_class: "page-overlay",
-
+                    gtk::ScrolledWindow {
+                        set_vexpand: true,
+                        set_hscrollbar_policy: gtk::PolicyType::Never,
                         #[local_ref]
                         verse_list -> gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_margin_all: 30,
                             set_spacing: 8,
+                        },
+                    },
+
+                    // 2. MIDDLE LAYER: The Dimming Scrim
+                    add_overlay = &gtk::Box {
+                        add_css_class: "dim-scrim",
+                        #[watch]
+                        set_visible: options_revealer.reveals_child(),
+                        set_can_target: false,
+                    },
+
+                    // 3. TOP LAYER: The Morphing Menu
+                    #[name = "overlay_container"]
+                    add_overlay =  &gtk::Box {
+                        add_css_class: "floating-menu-anchor",
+                        set_halign: gtk::Align::End,
+                        set_valign: gtk::Align::End,
+                        set_margin_all: 25,
+
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            add_css_class: "page-menu-card",
+                            add_css_class: "osd",
+                            // Force the box to be only as wide as its current visible content
+                            set_halign: gtk::Align::End,
+
+                            gtk::Overlay {
+                                // The Menu Content
+                                #[name = "options_revealer"]
+                                gtk::Revealer {
+                                    set_transition_type: gtk::RevealerTransitionType::SlideUp,
+                                    set_transition_duration: 350,
+
+                                    gtk::Box {
+                                        set_orientation: gtk::Orientation::Vertical,
+                                        set_spacing: 15,
+                                        set_margin_all: 15,
+                                        // This defines the width ONLY when revealed
+                                        set_width_request: 250,
+
+                                        gtk::Box {
+                                            set_spacing: 12,
+                                            gtk::Image { set_icon_name: Some("font-x-generic-symbolic") },
+                                            gtk::Scale::with_range(gtk::Orientation::Horizontal, 12.0, 32.0, 1.0) {
+                                                set_hexpand: true,
+                                                add_css_class: "accent",
+                                            },
+                                            gtk::Image { set_icon_name: Some("format-text-larger-symbolic") },
+                                        },
+
+                                        gtk::Box {
+                                            set_orientation: gtk::Orientation::Vertical,
+                                            set_spacing: 8,
+                                            set_homogeneous: true,
+
+                                            // 1. Strongs Toggle
+                                            gtk::CheckButton {
+                                                set_label: Some("Strongs"),
+                                                // "pill" or "outline" usually looks better than "circular" for checkbuttons
+                                                add_css_class: "pill", 
+                                                connect_toggled[sender] => move |btn| {
+                                                    let msg = if btn.is_active() { 
+                                                        VerseInputMessage::EnableStrongs 
+                                                    } else { 
+                                                        VerseInputMessage::DisableStrongs 
+                                                    };
+                                                    sender.input(StudyInput::ToggleDisplay(msg));
+                                                }
+                                            },
+
+                                            // 2. Notes Toggle
+                                            gtk::CheckButton {
+                                                set_label: Some("Notes"),
+                                                add_css_class: "pill",
+                                                connect_toggled[sender] => move |btn| {
+                                                    let msg = if btn.is_active() { 
+                                                        VerseInputMessage::EnableNotes 
+                                                    } else { 
+                                                        VerseInputMessage::DisableNotes 
+                                                    };
+                                                    sender.input(StudyInput::ToggleDisplay(msg));
+                                                }
+                                            },
+                                        }
+                                    }
+                                },
+
+                                // The FAB Button
+                                add_overlay = &gtk::Button {
+                                    add_css_class: "circular",
+                                    add_css_class: "liquid-trigger",
+                                    set_has_frame: false,
+                                    set_width_request: 64,
+                                    set_height_request: 64,
+                                    // Center it so the circle doesn't move when the menu expands
+                                    set_halign: gtk::Align::Center,
+                                    set_valign: gtk::Align::End,
+
+                                    #[watch]
+                                    set_visible: !options_revealer.reveals_child(),
+                                    set_opacity: if options_revealer.reveals_child() { 0.0 } else { 1.0 },
+
+                                    gtk::Image {
+                                        set_icon_name: Some("text-size-info-symbolic"),
+                                        set_pixel_size: 24,
+                                    },
+                                    connect_clicked[options_revealer] => move |_| {
+                                        let is_on = options_revealer.reveals_child();
+                                        options_revealer.set_reveal_child(!is_on);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -74,6 +191,32 @@ impl SimpleComponent for BiblePage {
 
         let verse_list = model.verses.widget();
         let widgets = view_output!();
+
+        // --- HOVER LOGIC ---
+        let motion = gtk::EventControllerMotion::new();
+
+        // Create a local reference for the macro to capture
+        let options_revealer = &widgets.options_revealer;
+
+        // Fixed macro syntax: comma after the capture list
+        motion.connect_enter(clone!(
+            #[weak]
+            options_revealer,
+            move |_, _, _| {
+                options_revealer.set_reveal_child(true);
+            }
+        ));
+
+        motion.connect_leave(clone!(
+            #[weak]
+            options_revealer,
+            move |_| {
+                options_revealer.set_reveal_child(false);
+            }
+        ));
+
+        widgets.overlay_container.add_controller(motion);
+
         sender.input(StudyInput::LoadReference(query));
 
         ComponentParts { model, widgets }
@@ -84,6 +227,12 @@ impl SimpleComponent for BiblePage {
             StudyInput::LoadReference(refe) => self.load_reference(&refe),
             StudyInput::SelectStrong(_) => {}
             StudyInput::SetModule(name) => self.module = name,
+            StudyInput::ToggleDisplay(factory_msg) => {
+                // Broadcast the toggle to every verse in the factory
+                for i in 0..self.verses.len() {
+                    self.verses.send(i, factory_msg.clone());
+                }
+            }
         }
     }
 }
@@ -93,8 +242,16 @@ impl BiblePage {
         let verses = self.render_content_to_verses(reference);
         let mut guard = self.verses.guard();
         guard.clear();
-        for v in verses {
-            guard.push_back(v);
+        for verse in verses {
+            guard.push_back((
+                verse,
+                DisplayConfig {
+                    show_strongs: false,
+                    show_morphs: false,
+                    show_lemma: false,
+                    show_notes: false,
+                },
+            ));
         }
     }
 

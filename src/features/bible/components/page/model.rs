@@ -300,6 +300,7 @@ impl BiblePage {
                     show_morphs: false,
                     show_lemma: false,
                     show_notes: false,
+                    added_style: super::word::AddedWordStyle::Brackets,
                 },
             ));
         }
@@ -521,7 +522,7 @@ impl BiblePage {
                         current_lex = Some(LexicalInfo {
                             strongs,
                             lemma: tr_lemma,
-                            morph: Some(self.decode_morph(raw_morph)),
+                            morph: self.decode_morph(raw_morph),
                             ..Default::default()
                         });
                     }
@@ -626,47 +627,52 @@ impl BiblePage {
             .unwrap_or(0)
     }
 
-    fn decode_morph(&self, morph: &str) -> String {
+    fn decode_morph(&self, morph: &str) -> Vec<String> {
         let code = morph.split(':').last().unwrap_or(morph);
-        let mut parts = Vec::new();
+        let mut parts = Vec::new(); // Compiler infers Vec<String>
 
         let chars: Vec<char> = code.chars().collect();
         if chars.is_empty() {
-            return code.to_string();
+            return Vec::new();
         }
 
-        // First char: Part of Speech
+        // Positional Logic: Part of Speech
         match chars[0] {
-            'N' => parts.push("Noun"),
-            'V' => parts.push("Verb"),
-            'A' => parts.push("Adjective"),
-            'R' => parts.push("Pronoun"),
-            'D' => parts.push("Adverb"),
-            'P' => parts.push("Preposition"),
-            'C' => parts.push("Conjunction"),
-            'I' => parts.push("Interjection"),
+            'N' => parts.push("Noun".to_string()),
+            'V' => parts.push("Verb".to_string()),
+            'A' => parts.push("Adj".to_string()),
+            'R' => parts.push("Pron".to_string()),
+            'D' => parts.push("Adv".to_string()),
+            'P' => parts.push("Prep".to_string()),
+            'C' => parts.push("Conj".to_string()),
+            'I' => parts.push("Interj".to_string()),
             _ => {}
         }
 
-        // This is a simplified logic - Robinson's codes are positional.
-        // Example: N-DSM -> Noun, Dative, Singular, Masculine
-        for c in chars.iter().skip(1) {
+        // Positional logic for grammatical features
+        for (i, &c) in chars.iter().enumerate().skip(1) {
             match c {
                 '-' => continue,
-                'N' => parts.push("Nominative"),
-                'G' => parts.push("Genitive"),
-                'D' => parts.push("Dative"),
-                'A' => parts.push("Accusative"),
-                'S' => parts.push("Singular"),
-                'P' => parts.push("Plural"),
-                'M' => parts.push("Masculine"),
-                'F' => parts.push("Feminine"),
-                'N' if parts.contains(&"Noun") => parts.push("Neuter"),
+                'N' => parts.push("Nom".to_string()),
+                'G' => parts.push("Gen".to_string()),
+                'D' => parts.push("Dat".to_string()),
+                'A' => parts.push("Acc".to_string()),
+                'S' => parts.push("Sing".to_string()),
+                'P' => {
+                    if chars[0] == 'V' && i < 3 {
+                        parts.push("Pres".to_string());
+                    } else {
+                        parts.push("Plur".to_string());
+                    }
+                }
+                'M' => parts.push("Masc".to_string()),
+                'F' => parts.push("Fem".to_string()),
+                'T' => parts.push("Neut".to_string()),
                 _ => {}
             }
         }
 
-        parts.join(", ")
+        parts
     }
 
     unsafe fn sword_ptr_to_string(&self, ptr: *const std::os::raw::c_char) -> Option<String> {

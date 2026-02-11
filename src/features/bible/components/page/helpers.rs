@@ -12,12 +12,11 @@ pub enum SegmentStyle {
 /// Lexical metadata attached to a word
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LexicalInfo {
-    pub strongs: Vec<String>,   // "G3056"
-    pub lemma: Option<String>,  // "λόγος"
-    pub gloss: Option<String>,  // "word, speech"
-    pub morph: Option<String>,
+    pub strongs: Vec<String>,  // "G3056"
+    pub lemma: Option<String>, // "λόγος"
+    pub gloss: Option<String>, // "word, speech"
+    pub morph: Vec<String>,
 }
-
 
 /// A single renderable word or punctuation mark
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,10 +81,29 @@ pub struct BibleVersion {
 #[derive(Debug)]
 pub enum HtmlEvent {
     Text(String),
-    Strong(String),     // "G3056"
-    Morph(String),      // "V-PAI-3S"
+    Strong(String), // "G3056"
+    Morph(String),  // "V-PAI-3S"
     Note(String),
     RedStart,
     RedEnd,
     AddedWord,
+}
+
+impl Default for Word {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            lex: None,
+
+            style: SegmentStyle::Plain,
+            is_red: false,
+            is_italic: false,
+            is_bold_text: false,
+            is_punctuation: false,
+
+            is_first_in_group: false,
+            is_last_in_group: false,
+            note: None,
+        }
+    }
 }

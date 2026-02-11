@@ -1,7 +1,10 @@
 use adw::prelude::*;
 use relm4::{FactorySender, prelude::*};
 
-use crate::features::bible::components::page::{helpers::Verse, word::AddedWordStyle};
+use crate::features::bible::components::page::{
+    helpers::Verse,
+    word::{AddedWordStyle, WordModel, WordModelInput},
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct DisplayConfig {
@@ -9,11 +12,14 @@ pub struct DisplayConfig {
     pub show_morphs: bool,
     pub show_lemma: bool,
     pub show_notes: bool,
+    pub added_style: AddedWordStyle,
 }
 
 pub struct VerseModel {
     pub data: Verse,           // The "Pure" data struct from your extension
     pub config: DisplayConfig, // The UI-only state
+
+    pub word_controllers: Vec<Controller<WordModel>>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,7 +90,7 @@ impl FactoryComponent for VerseModel {
 
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
-                        set_margin_top: 4, 
+                        set_margin_top: 4,
 
                         #[local_ref]
                         notes_container -> adw::WrapBox {
@@ -101,6 +107,7 @@ impl FactoryComponent for VerseModel {
         Self {
             data: init.0,
             config: init.1,
+            word_controllers: Vec::new(),
         }
     }
 
@@ -111,6 +118,7 @@ impl FactoryComponent for VerseModel {
         _returned_widget: &gtk::Widget,
         _sender: FactorySender<Self>,
     ) -> Self::Widgets {
+        let mut word_controllers = Vec::new();
         let word_flow_box = adw::WrapBox::builder()
             .line_spacing(6)
             .hexpand(true)
@@ -118,10 +126,15 @@ impl FactoryComponent for VerseModel {
             .build();
 
         for word in &self.data.words {
-            let word = word.build_widget(AddedWordStyle::Italic, self.config);
+            let controller = WordModel::builder()
+                .launch((word.clone(), self.config.clone()))
+                .detach();
 
-            word_flow_box.append(&word);
+            word_flow_box.append(controller.widget());
+            word_controllers.push(controller);
         }
+
+        self.word_controllers = word_controllers;
 
         let word_flow = &word_flow_box;
         let notes_container = adw::WrapBox::builder()
@@ -148,7 +161,9 @@ impl FactoryComponent for VerseModel {
 
     fn update(&mut self, msg: Self::Input, _sender: FactorySender<Self>) {
         match msg {
-            VerseInputMessage::EnableStrongs => self.config.show_strongs = true,
+            VerseInputMessage::EnableStrongs => {
+                self.config.show_strongs = true;
+            }
             VerseInputMessage::DisableStrongs => self.config.show_strongs = false,
             VerseInputMessage::EnableNotes => self.config.show_notes = true,
             VerseInputMessage::DisableNotes => self.config.show_notes = false,
@@ -156,9 +171,11 @@ impl FactoryComponent for VerseModel {
             VerseInputMessage::DisableMorphs => self.config.show_morphs = false,
             VerseInputMessage::EnableLemma => self.config.show_lemma = true,
             VerseInputMessage::DisableLemma => self.config.show_lemma = false,
-            VerseInputMessage::ChangeFontSize(font_scale)=>{
+            VerseInputMessage::ChangeFontSize(font_scale) => {}
+        }
 
-            }
+        for controller in &self.word_controllers {
+            controller.emit(WordModelInput::UpdateConfig(self.config.clone()));
         }
     }
 }

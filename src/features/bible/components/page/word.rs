@@ -12,6 +12,10 @@ pub enum AddedWordStyle {
     Brackets,
 }
 
+pub struct WordModel {
+    
+}
+
 impl Word {
     pub fn build_widget(&self, added_style: AddedWordStyle, config: DisplayConfig) -> gtk::Widget {
         let wrapper = gtk::Box::builder()

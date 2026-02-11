@@ -26,6 +26,7 @@ pub enum VerseInputMessage {
     DisableMorphs,
     EnableLemma,
     DisableLemma,
+    ChangeFontSize(f64),
 }
 
 // --- VERSE FACTORY ---
@@ -42,7 +43,9 @@ impl FactoryComponent for VerseModel {
             set_orientation: gtk::Orientation::Horizontal,
             set_spacing: 12,
             set_hexpand: true,
+            add_css_class: "verse-root",
 
+            // 1. Verse Number - Aligned to the top to stay fixed
             gtk::Label {
                 add_css_class: "verser-number",
                 set_markup: &format!(
@@ -52,10 +55,13 @@ impl FactoryComponent for VerseModel {
                 set_valign: gtk::Align::Start,
             },
 
+            // 2. Content Stack (Text + Notes)
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
-                set_spacing: 12,
+                set_spacing: 8, // Tight spacing between text and notes
+                set_hexpand: true,
 
+                // Main Bible Text
                 #[local_ref]
                 word_flow -> adw::WrapBox {
                     set_line_spacing: 12,
@@ -63,10 +69,29 @@ impl FactoryComponent for VerseModel {
                     set_halign: gtk::Align::Start,
                 },
 
-                #[local_ref]
-                notes_container -> adw::WrapBox{
+                // Notes Revealer - Animates expansion when show_notes is true
+                gtk::Revealer {
+                    set_transition_type: gtk::RevealerTransitionType::SlideDown,
+                    set_transition_duration: 350,
+
+                    // Triggers the slide animation
                     #[watch]
-                    set_visible: !self.data.notes.is_empty() && self.config.show_notes,
+                    set_reveal_child: !self.data.notes.is_empty() && self.config.show_notes,
+
+                    // Ensures the revealer doesn't block layout when hidden
+                    #[watch]
+                    set_visible: !self.data.notes.is_empty(),
+
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_margin_top: 4, 
+
+                        #[local_ref]
+                        notes_container -> adw::WrapBox {
+                            add_css_class: "verse-notes",
+                            set_hexpand: true,
+                        }
+                    }
                 }
             }
         }
@@ -131,6 +156,9 @@ impl FactoryComponent for VerseModel {
             VerseInputMessage::DisableMorphs => self.config.show_morphs = false,
             VerseInputMessage::EnableLemma => self.config.show_lemma = true,
             VerseInputMessage::DisableLemma => self.config.show_lemma = false,
+            VerseInputMessage::ChangeFontSize(font_scale)=>{
+
+            }
         }
     }
 }

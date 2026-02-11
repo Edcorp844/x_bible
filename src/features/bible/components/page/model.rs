@@ -28,7 +28,6 @@ pub enum StudyInput {
     /// Sends a toggle message to all verses in the factory
     ToggleDisplay(VerseInputMessage),
 }
-
 #[relm4::component(pub)]
 impl SimpleComponent for BiblePage {
     type Init = (Arc<SwordEngine>, String, String);
@@ -46,7 +45,7 @@ impl SimpleComponent for BiblePage {
                     set_vexpand: true,
                     add_css_class: "page-overlay",
 
-                    // 1. BASE LAYER: Bible Text
+                    // LAYER 1: BIBLE TEXT
                     gtk::ScrolledWindow {
                         set_vexpand: true,
                         set_hscrollbar_policy: gtk::PolicyType::Never,
@@ -58,7 +57,7 @@ impl SimpleComponent for BiblePage {
                         },
                     },
 
-                    // 2. MIDDLE LAYER: Dimming Scrim
+                    // LAYER 2: BACKGROUND DIMMING
                     #[name = "dim_scrim"]
                     add_overlay = &gtk::Box {
                         add_css_class: "dim-scrim",
@@ -66,86 +65,133 @@ impl SimpleComponent for BiblePage {
                         set_can_target: false,
                     },
 
-                    // 3. TOP LAYER: The Morphing Menu
+                    // LAYER 3: THE MENU (PINNED TO BOTTOM-RIGHT)
                     #[name = "overlay_container"]
                     add_overlay = &gtk::Box {
-                        add_css_class: "floating-menu-anchor",
                         set_halign: gtk::Align::End,
                         set_valign: gtk::Align::End,
                         set_margin_all: 25,
+                        // Ensure this outer box doesn't grow taller than its content
+                        set_vexpand: false,
 
+                        #[name = "menu_card"]
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             add_css_class: "page-menu-card",
                             add_css_class: "osd",
-                            set_halign: gtk::Align::End,
+                            set_spacing: 0,
+                            set_valign: gtk::Align::End,
 
-                            gtk::Overlay {
-                                // The Menu Content
-                                #[name = "options_revealer"]
-                                gtk::Revealer {
-                                    set_transition_type: gtk::RevealerTransitionType::SlideUp,
-                                    set_transition_duration: 350,
-                                    set_visible: false, // Hidden initially for circularity
+                            // TOP ELEMENT: THE BUTTON
+                            #[name = "menu_button"]
+                            gtk::Button {
+                                add_css_class: "circular",
+                                add_css_class: "liquid-trigger",
+                                set_has_frame: false,
+                                set_width_request: 64,
+                                set_height_request: 64,
+                                set_halign: gtk::Align::Center,
+                                set_valign: gtk::Align::Start,
 
+                                gtk::Image {
+                                    set_icon_name: Some("page-menu-symbolic"),
+                                    set_pixel_size: 24,
+                                }
+                            },
+
+                            // BOTTOM ELEMENT: THE REVEALER
+                            #[name = "options_revealer"]
+                            gtk::Revealer {
+                                set_transition_type: gtk::RevealerTransitionType::SlideDown,
+                                set_transition_duration: 250,
+                                set_visible: false,
+                                // This ensures it grows DOWN from the button without pre-allocating space
+                                set_valign: gtk::Align::Start,
+                                set_vexpand: false,
+
+                                gtk::Box {
+                                    set_orientation: gtk::Orientation::Vertical,
+                                    set_spacing: 20,
+                                    set_width_request: 250,
+                                    // Strict margins: Top is 0 to touch the button
+                                    set_margin_top: 0,
+                                    set_margin_bottom: 20,
+                                    set_margin_start: 20,
+                                    set_margin_end: 20,
+
+                                    // SECTION: FONT SIZE
                                     gtk::Box {
-                                        set_orientation: gtk::Orientation::Vertical,
-                                        set_spacing: 15,
-                                        set_margin_all: 15,
-                                        set_width_request: 250,
+                                        set_spacing: 12,
+                                        gtk::Image {
+                                            set_icon_name: Some("font-letter-symbolic"),
+                                        },
+                                        gtk::Scale::with_range(gtk::Orientation::Horizontal, 12.0, 32.0, 1.0) {
+                                            set_hexpand: true,
+                                            add_css_class: "accent",
+                                            set_value: 16.0,
+                                            connect_value_changed[sender] => move |scale| {
+                                                sender.input(
+                                                    StudyInput::ToggleDisplay(
+                                                        VerseInputMessage::ChangeFontSize(
+                                                            scale.value()
+                                                        )
+                                                    )
+                                                )
+                                            }
+                                        },
+                                        gtk::Image {
+                                            set_icon_name: Some("font-letter-symbolic"),
+                                            set_pixel_size: 30,
+                                        },
+                                    },
 
-                                        // Font Controls
-                                        gtk::Box {
-                                            set_spacing: 12,
-                                            gtk::Image { set_icon_name: Some("font-x-generic-symbolic") },
-                                            gtk::Scale::with_range(gtk::Orientation::Horizontal, 12.0, 32.0, 1.0) {
-                                                set_hexpand: true,
-                                                add_css_class: "accent",
-                                            },
-                                            gtk::Image { set_icon_name: Some("font-size-increase-symbolic") },
+                                    // SECTION: TOGGLES
+                                    gtk::Box {
+                                        set_spacing: 10,
+                                        set_homogeneous: true,
+
+                                        gtk::CheckButton {
+                                            set_label: Some("Strongs"),
+                                            add_css_class: "pill",
+                                            connect_toggled[sender] => move |btn| {
+                                                let msg = if btn.is_active() { VerseInputMessage::EnableStrongs }
+                                                          else { VerseInputMessage::DisableStrongs };
+                                                sender.input(StudyInput::ToggleDisplay(msg));
+                                            }
                                         },
 
-                                        // Toggles
-                                        gtk::Box {
+                                        gtk::CheckButton {
+                                            set_label: Some("Notes"),
+                                            add_css_class: "pill",
+                                            connect_toggled[sender] => move |btn| {
+                                                let msg = if btn.is_active() { VerseInputMessage::EnableNotes }
+                                                          else { VerseInputMessage::DisableNotes };
+                                                sender.input(StudyInput::ToggleDisplay(msg));
+                                            }
+                                        },
+                                    },
+                                     gtk::Box {
                                             set_spacing: 8,
                                             set_homogeneous: true,
                                             gtk::CheckButton {
-                                                set_label: Some("Strongs"),
+                                                set_label: Some("Lemma"),
                                                 add_css_class: "pill",
                                                 connect_toggled[sender] => move |btn| {
-                                                    let msg = if btn.is_active() { VerseInputMessage::EnableStrongs }
-                                                              else { VerseInputMessage::DisableStrongs };
+                                                    let msg = if btn.is_active() { VerseInputMessage::EnableLemma }
+                                                              else { VerseInputMessage::DisableLemma };
                                                     sender.input(StudyInput::ToggleDisplay(msg));
                                                 }
                                             },
                                             gtk::CheckButton {
-                                                set_label: Some("Notes"),
+                                                set_label: Some("Morph"),
                                                 add_css_class: "pill",
                                                 connect_toggled[sender] => move |btn| {
-                                                    let msg = if btn.is_active() { VerseInputMessage::EnableNotes }
-                                                              else { VerseInputMessage::DisableNotes };
+                                                    let msg = if btn.is_active() { VerseInputMessage::EnableMorphs }
+                                                              else { VerseInputMessage::DisableMorphs };
                                                     sender.input(StudyInput::ToggleDisplay(msg));
                                                 }
                                             },
                                         }
-                                    }
-                                },
-
-                                // The FAB Button (Placed perfectly in the center of the circle)
-                                #[name = "menu_button"]
-                                add_overlay = &gtk::Button {
-                                    add_css_class: "circular",
-                                    add_css_class: "liquid-trigger",
-                                    set_has_frame: false,
-                                    set_width_request: 64,
-                                    set_height_request: 64,
-                                    set_halign: gtk::Align::Center,
-                                    set_valign: gtk::Align::Center,
-
-                                    gtk::Image {
-                                        set_icon_name: Some("font-x-generic-symbolic"),
-                                        set_pixel_size: 24,
-                                    }
                                 }
                             }
                         }
@@ -172,11 +218,9 @@ impl SimpleComponent for BiblePage {
         };
 
         let verse_list = model.verses.widget();
-        
         let widgets = view_output!();
         let motion = gtk::EventControllerMotion::new();
 
-        // --- THE GOOD LOGIC ---
         let options_revealer = &widgets.options_revealer;
         let dim_scrim = &widgets.dim_scrim;
         let menu_button = &widgets.menu_button;
@@ -189,14 +233,11 @@ impl SimpleComponent for BiblePage {
             #[weak]
             menu_button,
             move |_, _, _| {
-                // Show the layout container for the menu
                 options_revealer.set_visible(true);
                 options_revealer.set_reveal_child(true);
-
-                // Dim the background
                 dim_scrim.set_visible(true);
 
-                // Hide the FAB button so it doesn't overlap the menu content
+                // Button fades out as menu takes over
                 menu_button.set_opacity(0.0);
                 menu_button.set_can_target(false);
             }
@@ -210,18 +251,16 @@ impl SimpleComponent for BiblePage {
             #[weak]
             menu_button,
             move |_| {
-                // Start closing animation
                 options_revealer.set_reveal_child(false);
                 dim_scrim.set_visible(false);
 
-                // Restore the FAB button
+                // Button reappears
                 menu_button.set_opacity(1.0);
                 menu_button.set_can_target(true);
             }
         ));
 
-        // CRITICAL: Only set_visible(false) AFTER the slide-down is done.
-        // This ensures the button returns to a perfect circle smoothly.
+        // Cleanup layout after animation finishes
         options_revealer.connect_child_revealed_notify(move |rev| {
             if !rev.reveals_child() && !rev.is_child_revealed() {
                 rev.set_visible(false);

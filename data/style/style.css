@@ -80,24 +80,32 @@ label {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+/*Study page menu */
 .page-menu-card {
     padding: 0;
     margin: 0;
-    border-radius: 32px; /* Circle state (half of 64px) */
-    transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1);
-      border: 1px solid alpha(var(--card-fg-color), 0.1);
-
+    /* Perfect circle for 64px button */
+    border-radius: 32px; 
+    /* Use a "Back" easing for opening, but a fast "In" easing for closing */
+    transition: border-radius 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: 1px solid alpha(var(--card-fg-color), 0.1);
 }
 
-/* Morph shape only when revealed */
+/* When the menu is CLOSED (collapsing), we want the radius to snap back faster */
+.page-menu-card:not(:has(revealer[reveal-child=true])) {
+    transition: border-radius 200ms ease-in;
+}
+
 .page-menu-card.osd:has(revealer[reveal-child=true]) {
     border-radius: 20px;
 }
 
-
-
-/* The Scrim */
 .dim-scrim {
     background: radial-gradient(circle at bottom right, alpha(black, 0.5), transparent 75%);
-    transition: opacity 400ms ease;
+    /* Make the dimming disappear faster than it appears */
+    transition: opacity 250ms ease-in-out;
+}
+
+.box-this{
+    background-color: var(--dark-2);
 }

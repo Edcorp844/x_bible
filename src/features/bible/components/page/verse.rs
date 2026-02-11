@@ -13,6 +13,7 @@ pub struct DisplayConfig {
     pub show_lemma: bool,
     pub show_notes: bool,
     pub added_style: AddedWordStyle,
+    pub font_size: f64,
 }
 
 pub struct VerseModel {
@@ -171,7 +172,7 @@ impl FactoryComponent for VerseModel {
             VerseInputMessage::DisableMorphs => self.config.show_morphs = false,
             VerseInputMessage::EnableLemma => self.config.show_lemma = true,
             VerseInputMessage::DisableLemma => self.config.show_lemma = false,
-            VerseInputMessage::ChangeFontSize(font_scale) => {}
+            VerseInputMessage::ChangeFontSize(font_scale) => self.config.font_size = font_scale,
         }
 
         for controller in &self.word_controllers {

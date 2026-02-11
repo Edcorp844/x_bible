@@ -301,6 +301,7 @@ impl BiblePage {
                     show_lemma: false,
                     show_notes: false,
                     added_style: super::word::AddedWordStyle::Brackets,
+                    font_size: 16.0
                 },
             ));
         }

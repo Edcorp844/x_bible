@@ -174,7 +174,9 @@ impl WordModel {
             content = format!("<b>{}</b>", content);
         }
 
-        format!("<span size='large'>{}</span>", content)
+        let pango_size = (self.config.font_size * 1024.0) as i32;
+
+        format!("<span size='{}'>{}</span>", pango_size, content)
     }
 
     fn attach_note(&self) -> gtk::Label {
@@ -301,5 +303,3 @@ impl WordModel {
         wrapper
     }
 }
-
-

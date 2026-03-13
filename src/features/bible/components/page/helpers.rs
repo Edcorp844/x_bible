@@ -1,7 +1,10 @@
+use std::fmt;
+
+use gtk::gio::Settings;
 use serde::{Deserialize, Serialize};
 
 /// How a segment should be rendered or interpreted
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SegmentStyle {
     Plain,
     Added,     // Supplied words (italics / brackets)
@@ -19,7 +22,7 @@ pub struct LexicalInfo {
 }
 
 /// A single renderable word or punctuation mark
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Word {
     pub text: String,
 
@@ -38,10 +41,12 @@ pub struct Word {
 
     /// Layout hint
     pub is_punctuation: bool,
+
+    pub is_title: bool,
 }
 
 /// A full verse, UI-agnostic
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Verse {
     pub osis_id: String,
     pub number: i32,
@@ -53,40 +58,34 @@ pub struct Verse {
     pub is_paragraph_start: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Book {
-    pub osis_id: String,
-    pub title: String,
-    pub chapters: Vec<Chapter>,
-    pub canonical: bool,
+#[derive(Debug, Clone, PartialEq)]
+pub enum TitleStyle {
+    H1,
+    H2,
+    H3,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Chapter {
-    pub title: String,
-    pub osis_ref: String,
-    pub number: String,
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextDirection {
+    Rtl,
+    Ltr,
+}
+
+impl TextDirection {
+    pub fn to_gtk_text_direction(&self) -> gtk::TextDirection {
+        match self {
+            Self::Ltr => gtk::TextDirection::Ltr,
+            Self::Rtl => gtk::TextDirection::Rtl,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Section {
+    pub title: Vec<Word>,
+    pub title_style: TitleStyle,
     pub verses: Vec<Verse>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BibleVersion {
-    pub osis_id: String,    // e.g., "KJV"
-    pub title: String,      // e.g., "King James Version (1769)"
-    pub identifier: String, // e.g., "Bible.KJV"
-    pub scope: String,      // e.g., "Gen-Rev"
-    pub ref_system: String, // e.g., "Bible.KJV"
-}
-
-#[derive(Debug)]
-pub enum HtmlEvent {
-    Text(String),
-    Strong(String), // "G3056"
-    Morph(String),  // "V-PAI-3S"
-    Note(String),
-    RedStart,
-    RedEnd,
-    AddedWord,
+    pub text_direction: TextDirection,
 }
 
 impl Default for Word {
@@ -103,7 +102,98 @@ impl Default for Word {
 
             is_first_in_group: false,
             is_last_in_group: false,
+
+            is_title: false,
             note: None,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AddedWordStyle {
+    Italic,
+    Brackets,
+}
+
+impl AddedWordStyle {
+    /// Converts a string from GSettings back into the Enum
+    pub fn from_string(s: &str) -> Self {
+        match s {
+            "Italic" => Self::Italic,
+            "Brackets" => Self::Brackets,
+            _ => Self::Brackets,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Brackets => format!("Brackets"),
+            Self::Italic => format!("Italic"),
+        }
+    }
+
+    pub fn all() -> Vec<Self> {
+        vec![Self::Italic, Self::Brackets]
+    }
+}
+
+// This allows to call .to_string() on the enum
+impl fmt::Display for AddedWordStyle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Self::Italic => "Italic",
+            Self::Brackets => "Brackets",
+        };
+        write!(f, "{s}")
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PageDisplayConfig {
+    pub settings: Settings,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AvailableFonts {
+    Sans,
+    Serif,
+    Monospace,
+    TimesNewRoman,
+    System,
+}
+
+impl AvailableFonts {
+    pub fn all() -> Vec<Self> {
+        vec![
+            Self::System,
+            Self::Sans,
+            Self::Serif,
+            Self::Monospace,
+            Self::TimesNewRoman,
+        ]
+    }
+
+    pub fn from_string(s: &str) -> Self {
+        match s {
+            "System" => Self::System,
+            "Sans" => Self::Sans,
+            "Serif" => Self::Serif,
+            "Monospace" => Self::Monospace,
+            "Times New Roman" => Self::TimesNewRoman,
+            _ => Self::System,
+        }
+    }
+}
+
+impl fmt::Display for AvailableFonts {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Self::System => "System",
+            Self::Sans => "Sans",
+            Self::Serif => "Serif",
+            Self::Monospace => "Monospace",
+            Self::TimesNewRoman => "Times New Roman",
+        };
+        write!(f, "{s}")
     }
 }

@@ -214,17 +214,11 @@ impl SideBar {
     fn render_library_list(widgets: &SideBarWidgets, sender: &ComponentSender<Self>) {
         let listbox = &widgets.library;
         let items = [
-            // Bibles
             ("bibles-symbolic", "Bible Versions"),
-            // Commentaries (Library/Reference look)
             ("commentaries-symbolic", "Commentaries"),
-            // Dictionaries (Alphabetical/Search look)
             ("dictionaries", "Dictionaries"),
-            // Audio Bibles (Standard audio/speaker)
             ("audio-bible-symbolic", "Audio Bibles"),
-            // Maps / Geography
             ("map-symbolic", "Maps"),
-            // General Books / Glossaries
             ("books-symbolic", "General Books"),
         ];
 

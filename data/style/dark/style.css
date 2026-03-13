@@ -1,0 +1,209 @@
+label {
+    font-size: 12pt;
+    font-family: "Inter", "Segoe UI", "Tahoma", "Amiri", "Scheherazade New", sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1;
+}
+
+.app-title {
+    font-weight: 600;
+    font-size: 20pt;
+}
+
+.sidebar_icon {
+    color: var(--accent-color);
+}
+
+.verser-number {
+    color: var(--blue-3);
+}
+
+.word-wrapper:hover {
+    background-color: var(--headerbar-bg-color);
+    border-radius: 8pt;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.verse-note {
+    background-color: var(--headerbar-bg-color);
+    padding-right: 5pt;
+    padding-left: 5pt;
+    padding-top: 2pt;
+    padding-bottom: 2pt;
+    border-radius: 8pt;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.book-cover {
+    background: linear-gradient(to right,
+            rgba(0, 0, 0, 0.2) 0%,
+            rgba(255, 255, 255, 0.1) 5%,
+            transparent 10%),
+        var(--dark-2);
+    /* Default book color */
+    border-radius: 4px 8px 8px 4px;
+    /* Curved right edge like pages */
+    box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.3);
+    padding: 1rem;
+    border-left: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.book-description-text {
+    font-size: 18px;
+    padding: 10px;
+    font-weight: normal;
+    color: #fff;
+}
+
+.book-title-caption {
+    font-weight: bold;
+    margin-top: 4px;
+}
+
+.lexical {
+    background-color: var(--secondary-sidebar-bg-color);
+    padding-right: 5pt;
+    padding-left: 5pt;
+    padding-top: 2pt;
+    padding-bottom: 2pt;
+    border-radius: 8pt;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.bible-note-popover contents {
+    border: 1px solid var(--border-color);
+    border-radius: 8pt;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.bible-note-popover arrow {
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/*Study page menu */
+.page-menu-card {
+    padding: 0;
+    margin: 0;
+    /* Perfect circle for 64px button */
+    /* border-radius: 32px; */
+    /* Use a "Back" easing for opening, but a fast "In" easing for closing */
+    transition: border-radius 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* border: 1px solid alpha(var(--card-fg-color), 0.1);*/
+}
+
+/* When the menu is CLOSED (collapsing), we want the radius to snap back faster */
+.page-menu-card:not(:has(revealer[reveal-child=true])) {
+    transition: border-radius 200ms ease-in;
+}
+
+.page-menu-card.osd:has(revealer[reveal-child=true]) {
+    border-radius: 20px;
+}
+
+.dim-scrim {
+    background: radial-gradient(circle at bottom right, alpha(black, 0.7), transparent 75%);
+    /* Make the dimming disappear faster than it appears */
+    transition: opacity 250ms ease-in-out;
+}
+
+.box-this {
+    background-color: var(--dark-2);
+}
+
+.studypage-menu-trigger-btn {
+    border: 1px solid alpha(var(--card-fg-color), 0.1);
+    background-color: var(--dark-5);
+}
+
+.studypage-menu-section-container {
+    border: 1px solid alpha(var(--card-fg-color), 0.1);
+    border-radius: 32px;
+    transition: border-radius 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.menu-font-option {
+    border-radius: 10px;
+
+    /* Vertical padding: 8px, Horizontal padding: 16px */
+    /* This ensures it looks like a balanced 'chip' */
+    padding: 4px 4px;
+
+    /* Ensure the font name doesn't wrap inside the chip */
+    white-space: nowrap;
+
+    /* Adds a smooth transition for hover effects */
+    transition: all 0.2s ease;
+}
+
+.menu-font-option-active {
+    border: 1px solid alpha(var(--card-fg-color), 0.1);
+    background-color: alpha(var(--accent-color), 0.4);
+}
+
+.menu-font-option:hover {
+    background-color: alpha(var(--accent-color), 0.6);
+    border-color: alpha(var(--card-fg-color), 0.3);
+}
+
+.parent {
+    background-color: #fff;
+}
+
+.preview-fade-overlay {
+
+    background-image: linear-gradient(to bottom,
+            alpha(var(--window-bg-color), 0) 0%,
+            alpha(var(--window-bg-color), 0.8) 50%,
+            var(--window-bg-color) 100%);
+}
+
+.preview-area-Compact {
+    --window-bg-color: #1e252b;
+    --window-fg-color: #dbeafe;
+
+    background-color: var(--window-bg-color);
+    color: var(--window-fg-color);
+}
+
+.preview-area-Modern {
+    --window-bg-color: #242424;
+    --window-fg-color: #eeeeee;
+
+    background-color: var(--window-bg-color);
+    color: var(--window-fg-color);
+}
+
+.preview-area-Classic {
+    --window-bg-color: #302e2a;
+    --window-fg-color: #e0ddd5;
+
+    background-color: var(--window-bg-color);
+    color: var(--window-fg-color);
+}
+
+.preview-area-Default {
+
+    --window-bg-color: #222226;
+    --window-fg-color: #ffffff;
+
+    background-color: var(--window-bg-color);
+    color: var(--window-fg-color);
+}
+
+.menu-theme-btn {
+    border: 2px solid var(--border-color);
+    padding: 20px;
+    border-radius: 10px;
+}
+
+
+.menu-theme-btn-active {
+    border: 2px solid var(--window-fg-color);
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.measure {
+    background-color: aqua;
+}

@@ -1,53 +1,59 @@
 use adw::prelude::*;
 use relm4::prelude::*;
 
-use crate::features::bible::components::page::{
-    helpers::{SegmentStyle, Word},
-    verse::DisplayConfig,
+use crate::features::{
+    bible::components::page::helpers::{AddedWordStyle, AvailableFonts, SegmentStyle, Word},
+    core::display_configurations::Config::TextConfig,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AddedWordStyle {
-    Italic,
-    Brackets,
-}
 
 pub struct WordModel {
     data: Word,
-    config: DisplayConfig,
+    config: TextConfig,
+    text_direction: gtk::TextDirection,
 }
 
 #[derive(Debug)]
 pub enum WordModelInput {
-    UpdateConfig(DisplayConfig),
+    LookUp,
+    UpdateConfig(TextConfig),
+}
+
+#[derive(Debug)]
+pub enum WordModelOutput {
+    LookUp(String),
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for WordModel {
-    type Init = (Word, DisplayConfig);
+    type Init = (Word, TextConfig, gtk::TextDirection);
     type Input = WordModelInput;
-    type Output = ();
+    type Output = WordModelOutput;
 
     view! {
         #[root]
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
             set_spacing: 2,
-            set_halign: gtk::Align::Start,
+            #[track(true)]
+            set_halign: model.get_align(),
 
             #[name="word_wrapper"]
             gtk::Box{
                 set_orientation: gtk::Orientation::Horizontal,
                 set_spacing: 2,
-                set_halign: gtk::Align::Start,
+                #[track(true)]
+                set_halign: model.get_align(),
 
 
                 gtk::Label {
                     add_css_class: "bible-text",
                     set_hexpand: false,
-                    set_margin_start: if model.data.is_punctuation { 0 } else { 8 },
-                    #[watch]
+                    #[track(true)]
+                    set_margin_start: if model.data.is_punctuation { 0 } else { model.config.read().unwrap().pango_word_spacing() },
+                    #[track(true)]
                     set_markup: model.render_word().as_str(),
+                    #[track(true)]
+                    set_direction: model.text_direction,
                     set_xalign: 0.0,
                 },
             },
@@ -58,7 +64,7 @@ impl SimpleComponent for WordModel {
                 set_halign: gtk::Align::Start,
 
                 #[watch]
-                set_visible: model.config.show_lemma || model.config.show_strongs || model.config.show_morphs,
+                set_visible: model.config.read().unwrap().show_lemma() ||model.config.read().unwrap().show_strongs() || model.config.read().unwrap().show_morphs(),
 
                 gtk::Revealer{
                     set_transition_type: gtk::RevealerTransitionType::SlideDown,
@@ -77,6 +83,13 @@ impl SimpleComponent for WordModel {
 
                         #[watch]
                         set_markup: &model.get_strongs_markup(),
+
+                        add_controller = gtk::GestureClick {
+                            set_button: 1,
+                            connect_released[sender] => move |_, _, _, _| {
+                                sender.input(WordModelInput::LookUp)
+                            }
+                        }
                     }
                 },
 
@@ -117,11 +130,12 @@ impl SimpleComponent for WordModel {
     fn init(
         init: Self::Init,
         root: Self::Root,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let model = Self {
             data: init.0,
             config: init.1,
+            text_direction: init.2,
         };
 
         let morph_box = model.get_morphs_widget();
@@ -137,10 +151,18 @@ impl SimpleComponent for WordModel {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
+    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>) {
         match msg {
             WordModelInput::UpdateConfig(new_config) => {
                 self.config = new_config;
+            }
+            WordModelInput::LookUp => {
+                if let Some(lex) = &self.data.lex {
+                    for s in &lex.strongs {
+                        println!("LEXING: {}", s);
+                        let _ = sender.output(WordModelOutput::LookUp(s.clone()));
+                    }
+                }
             }
         }
     }
@@ -151,7 +173,7 @@ impl WordModel {
         let escaped = gtk::glib::markup_escape_text(&self.data.text);
 
         let mut content = match self.data.style {
-            SegmentStyle::Added => match self.config.added_style {
+            SegmentStyle::Added => match self.config.read().unwrap().added_style() {
                 AddedWordStyle::Italic => format!("<i>{}</i>", escaped),
                 AddedWordStyle::Brackets => {
                     let open = if self.data.is_first_in_group { "[" } else { "" };
@@ -162,7 +184,7 @@ impl WordModel {
             _ => escaped.to_string(),
         };
 
-        if self.data.is_red {
+        if self.data.is_red && self.config.read().unwrap().christ_words_red() {
             content = format!("<span color='#e01b24'>{}</span>", content);
         }
 
@@ -170,13 +192,31 @@ impl WordModel {
             content = format!("<i>{}</i>", content);
         }
 
-        if self.data.is_bold_text {
+        if self.config.read().unwrap().bold_font() {
             content = format!("<b>{}</b>", content);
         }
 
-        let pango_size = (self.config.font_size * 1024.0) as i32;
+        if self.data.is_title {
+            content = format!("<span size='large'><b>{}</b></span>", content);
+        }
 
-        format!("<span size='{}'>{}</span>", pango_size, content)
+        match self.config.read().unwrap().font() {
+            AvailableFonts::System => {
+                format!(
+                    "<span size='{}'>{}</span>",
+                    self.config.read().unwrap().pango_text_size(),
+                    content
+                )
+            }
+            _ => {
+                format!(
+                    "<span size='{}' face='{}'>{}</span>",
+                    self.config.read().unwrap().pango_text_size(),
+                    self.config.read().unwrap().font().to_string(),
+                    content,
+                )
+            }
+        }
     }
 
     fn attach_note(&self) -> gtk::Label {
@@ -186,9 +226,21 @@ impl WordModel {
             .xalign(0.0)
             .build();
 
-        note_label.set_markup("<span color='#d71452' size='x-small'><i>n*</i></span>");
+        let note_size = (self.config.read().unwrap().pango_text_size() as f64 * 0.6) as i32;
 
-        // --- CURSOR FIX ---
+        let note_markup = match self.config.read().unwrap().font() {
+            AvailableFonts::System => format!(
+                "<span color='#d71452' size='{}'><i>n*</i></span>",
+                note_size
+            ),
+            _ => format!(
+                "<span color='#d71452' size='{}'><i>n*</i></span>",
+                note_size
+            ),
+        };
+
+        note_label.set_markup(&note_markup.as_str());
+
         let motion = gtk::EventControllerMotion::new();
         motion.connect_enter(|motion, _, _| {
             let widget = motion.widget().unwrap();
@@ -197,13 +249,11 @@ impl WordModel {
 
         motion.connect_leave(|motion| {
             let widget = motion.widget().unwrap();
-            // Reset the cursor when leaving
             widget.set_cursor(None);
         });
 
         note_label.add_controller(motion);
 
-        // --- POPUP LOGIC ---
         let popover = gtk::Popover::builder()
             .css_classes(["bible-note-popover"])
             .autohide(true)
@@ -239,7 +289,7 @@ impl WordModel {
     }
 
     fn should_reveal_strong(&self) -> bool {
-        self.config.show_strongs
+        self.config.read().unwrap().show_strongs()
             && self
                 .data
                 .lex
@@ -260,7 +310,7 @@ impl WordModel {
     }
 
     fn should_reveal_lemma(&self) -> bool {
-        self.config.show_lemma
+        self.config.read().unwrap().show_lemma()
             && self
                 .data
                 .lex
@@ -280,7 +330,7 @@ impl WordModel {
     }
 
     fn should_reveal_morphs(&self) -> bool {
-        self.config.show_morphs
+        self.config.read().unwrap().show_morphs()
             && self
                 .data
                 .lex
@@ -301,5 +351,12 @@ impl WordModel {
             }
         }
         wrapper
+    }
+
+    fn get_align(&self) -> gtk::Align {
+        match self.text_direction {
+            gtk::TextDirection::Rtl => gtk::Align::End,
+            _ => gtk::Align::Start,
+        }
     }
 }

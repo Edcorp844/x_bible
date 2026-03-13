@@ -1,13 +1,20 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::features::{
-    bible::components::page::model::{BiblePage, StudyInput},
-    core::module_engine::{
-        sword_engine::SwordEngine,
-        sword_module::{ModuleBook, SwordModule},
+    bible::components::page::{
+        biblepage_model::{BiblePage, StudyInput, StudyPageOutput},
+        helpers::PageDisplayConfig,
     },
+    core::{
+        display_configurations::Config::TextConfig,
+        module_engine::{
+            sword_engine::SwordEngine,
+            sword_module::{ModuleBook, SwordModule},
+        },
+    },
+    dictionary::components::dictionary_model::{DictionaryInputMessage, DictionaryPage},
 };
 
 pub struct StudyPage {
@@ -24,10 +31,12 @@ pub struct StudyPage {
     chapter_list: gtk::StringList,
 
     bible_page: Controller<BiblePage>,
+    dictionary_page: Controller<DictionaryPage>,
     // Selection State
     selected_module_idx: usize,
     selected_book_idx: usize,
     selected_chapter: usize,
+    config: TextConfig,
 }
 
 #[derive(Debug)]
@@ -35,6 +44,8 @@ pub enum StudyPageInput {
     UpdateModule(u32),
     UpdateBook(u32),
     UpdateChapter(u32),
+    LookupSelectedStrong(String),
+    UpdateTheme,
 }
 
 #[derive(Debug)]
@@ -58,7 +69,10 @@ impl Component for StudyPage {
                     set_title: "Bible Study",
                     #[wrap(Some)]
                     set_child = &adw::ToolbarView {
+                        #[name="header"]
                         add_top_bar = &adw::HeaderBar {
+                            #[watch]
+                            set_css_classes: &[format!("preview-area-{}", (model.config.read().unwrap().theme())).as_str()],
                             #[wrap(Some)]
                             set_title_widget = &gtk::Box {
                                 add_css_class: "linked",
@@ -100,8 +114,69 @@ impl Component for StudyPage {
                             }
                         },
 
+                        #[name = "main_split"]
                         #[wrap(Some)]
-                        set_content = model.bible_page.widget(),
+                        set_content = &gtk::Paned{
+                            set_orientation: gtk::Orientation::Horizontal,
+                            set_wide_handle: true,
+                            set_shrink_start_child: true,
+                            #[watch]
+                            set_css_classes: &[format!("preview-area-{}", (model.config.read().unwrap().theme())).as_str(),],
+
+                            set_start_child=Some(model.bible_page.widget()),
+
+                            #[wrap(Some)]
+                            set_end_child = &adw::ToolbarView {
+
+                            set_margin_horizontal: 20,
+                            add_top_bar: switcher_bar = &adw::InlineViewSwitcher {
+                                #[watch]
+                                set_stack: Some(&stack),
+                                add_css_class: "round",
+
+                            },
+
+                            #[wrap(Some)]
+                            set_content: stack = &adw::ViewStack {
+                                set_vexpand: true,
+
+                                add_titled: (
+                                    &gtk::Label::new(Some("Lexicon")),
+                                    Some("lex"),
+                                    "Lexicon"
+                                ),
+
+                                add_titled: (
+                                    model.dictionary_page.widget(),
+                                    Some("dict"),
+                                    "Dictionary"
+                                ),
+
+                                // Page 2: References
+                                add_titled: (
+                                    &gtk::Label::new(Some("Cross References")),
+                                    Some("ref"),
+                                    "References"
+                                ),
+
+                                add_titled: (
+                                    &gtk::Label::new(Some("Commentary")),
+                                    Some("Comm"),
+                                    "Commentaries"
+                                ),
+
+                                add_titled: (
+                                    &gtk::Label::new(Some("Compare")),
+                                    Some("Comp"),
+                                    "Compare"
+                                ),
+
+                                // Page 3: Lexicon
+
+                            }
+                        }
+
+                        }
                     }
                 }
             }
@@ -134,7 +209,14 @@ impl Component for StudyPage {
                 initial_module_name.to_string(),
                 "Gen 1".to_string(),
             ))
-            .detach();
+            .forward(sender.input_sender(), move |msg| match msg {
+                StudyPageOutput::ChangeTheme => StudyPageInput::UpdateTheme,
+                StudyPageOutput::LookupSelectedStrong(text) => {
+                    StudyPageInput::LookupSelectedStrong(text)
+                }
+            });
+
+        let dictionary_page = DictionaryPage::builder().launch(engine.clone()).detach();
 
         let mut model = StudyPage {
             engine,
@@ -145,9 +227,11 @@ impl Component for StudyPage {
             book_list,
             chapter_list,
             bible_page: bible_page,
+            dictionary_page: dictionary_page,
             selected_module_idx: 0,
             selected_book_idx: 0,
             selected_chapter: 0,
+            config: Arc::new(RwLock::new(PageDisplayConfig::new())),
         };
 
         // Initialize cascading lists
@@ -159,7 +243,13 @@ impl Component for StudyPage {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        message: Self::Input,
+        _sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
         match message {
             StudyPageInput::UpdateModule(idx) => {
                 let idx = idx as usize;
@@ -171,12 +261,8 @@ impl Component for StudyPage {
                     self.rebuild_books();
                     self.rebuild_chapters(0);
 
-                     self.bible_page
-                    .emit( StudyInput::SetModule(module_name));
+                    self.bible_page.emit(StudyInput::SetModule(module_name));
                 }
-
-               
-                
             }
             StudyPageInput::UpdateBook(idx) => {
                 let idx = idx as usize;
@@ -189,6 +275,34 @@ impl Component for StudyPage {
                 self.selected_chapter = idx as usize;
                 self.bible_page
                     .emit(StudyInput::LoadReference(self.build_query_string()));
+            }
+
+            StudyPageInput::UpdateTheme => {
+                let theme = self.config.read().unwrap().theme();
+
+                //remove old theme classes first
+                let themes = ["Classic", "Modern", "Default", "Compact"];
+                for t in themes {
+                    let class = format!("preview-area-{}", t);
+                    if widgets.header.has_css_class(&class) {
+                        widgets.header.remove_css_class(&class);
+                    }
+                    if widgets.main_split.has_css_class(&class) {
+                        widgets.main_split.remove_css_class(&class);
+                    }
+                }
+
+                widgets
+                    .header
+                    .add_css_class(&format!("preview-area-{}", theme));
+                widgets
+                    .main_split
+                    .add_css_class(&format!("preview-area-{}", theme));
+            }
+
+            StudyPageInput::LookupSelectedStrong(text) => {
+                self.dictionary_page
+                    .emit(DictionaryInputMessage::Lookup(text));
             }
         }
     }

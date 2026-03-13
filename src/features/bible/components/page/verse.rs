@@ -1,30 +1,24 @@
 use adw::prelude::*;
-use relm4::{FactorySender, prelude::*};
+use relm4::prelude::*;
 
-use crate::features::bible::components::page::{
-    helpers::Verse,
-    word::{AddedWordStyle, WordModel, WordModelInput},
+use crate::features::{
+    bible::components::page::{
+        helpers::{AvailableFonts, Verse},
+        word::{WordModel, WordModelInput, WordModelOutput},
+    },
+    core::display_configurations::Config::TextConfig,
 };
 
-#[derive(Clone, Copy, Debug)]
-pub struct DisplayConfig {
-    pub show_strongs: bool,
-    pub show_morphs: bool,
-    pub show_lemma: bool,
-    pub show_notes: bool,
-    pub added_style: AddedWordStyle,
-    pub font_size: f64,
-}
-
 pub struct VerseModel {
-    pub data: Verse,           // The "Pure" data struct from your extension
-    pub config: DisplayConfig, // The UI-only state
-
+    pub data: Verse,
+    pub config: TextConfig,
     pub word_controllers: Vec<Controller<WordModel>>,
+    pub text_direction: gtk::TextDirection,
 }
 
 #[derive(Debug, Clone)]
 pub enum VerseInputMessage {
+    UpdateDisplayConf(TextConfig),
     EnableStrongs,
     DisableStrongs,
     EnableNotes,
@@ -34,18 +28,29 @@ pub enum VerseInputMessage {
     EnableLemma,
     DisableLemma,
     ChangeFontSize(f64),
+    ChangeFont(AvailableFonts),
+    ChangeWordSpacing(f64),
+    ChangeLineSpacing(f64),
+    ChangeBoldFont(bool),
+    ChangeJustify(bool),
+    PutChristWordsInRed(bool),
+    LookUp(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum VerseOutputMessage {
+    Lookup(String),
 }
 
 // --- VERSE FACTORY ---
-#[relm4::factory(pub)]
-impl FactoryComponent for VerseModel {
-    type Init = (Verse, DisplayConfig);
+#[relm4::component(pub)]
+impl SimpleComponent for VerseModel {
+    type Init = (Verse, TextConfig, gtk::TextDirection);
     type Input = VerseInputMessage;
-    type Output = ();
-    type CommandOutput = ();
-    type ParentWidget = gtk::Box;
+    type Output = VerseOutputMessage;
 
     view! {
+        #[root]
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_spacing: 12,
@@ -55,11 +60,13 @@ impl FactoryComponent for VerseModel {
             // 1. Verse Number - Aligned to the top to stay fixed
             gtk::Label {
                 add_css_class: "verser-number",
+                set_visible: model.data.number != 0,
                 set_markup: &format!(
                     "<span size='large'>{}</span>",
-                    self.data.number
+                    model.data.number
                 ),
                 set_valign: gtk::Align::Start,
+                set_visible: model.text_direction == gtk::TextDirection::Ltr,
             },
 
             // 2. Content Stack (Text + Notes)
@@ -71,9 +78,14 @@ impl FactoryComponent for VerseModel {
                 // Main Bible Text
                 #[local_ref]
                 word_flow -> adw::WrapBox {
-                    set_line_spacing: 12,
+                    #[watch]
+                    set_line_spacing: model.config.read().unwrap().pango_line_spacing(),
                     set_hexpand: true,
+                    #[watch]
+                    set_justify: if model.config.read().unwrap().justify() {adw::JustifyMode::Fill} else{adw::JustifyMode::None},
                     set_halign: gtk::Align::Start,
+                    #[watch]
+                    set_direction: model.text_direction,
                 },
 
                 // Notes Revealer - Animates expansion when show_notes is true
@@ -83,11 +95,11 @@ impl FactoryComponent for VerseModel {
 
                     // Triggers the slide animation
                     #[watch]
-                    set_reveal_child: !self.data.notes.is_empty() && self.config.show_notes,
+                    set_reveal_child: !model.data.notes.is_empty() && model.config.read().unwrap().show_notes(),
 
                     // Ensures the revealer doesn't block layout when hidden
                     #[watch]
-                    set_visible: !self.data.notes.is_empty(),
+                    set_visible: !model.data.notes.is_empty(),
 
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
@@ -100,25 +112,35 @@ impl FactoryComponent for VerseModel {
                         }
                     }
                 }
-            }
+            },
+
+             gtk::Label {
+                add_css_class: "verser-number",
+                set_visible: model.data.number != 0,
+                set_markup: &format!(
+                    "<span size='large'>{}</span>",
+                    model.data.number
+                ),
+                set_valign: gtk::Align::Start,
+                set_visible: model.text_direction == gtk::TextDirection::Rtl,
+            },
         }
     }
 
-    fn init_model(init: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
-        Self {
-            data: init.0,
-            config: init.1,
+    fn init(
+        init: Self::Init,
+        root: Self::Root,
+        sender: ComponentSender<Self>,
+    ) -> ComponentParts<Self> {
+        let (data, config, text_direction) = init;
+
+        let mut model = Self {
+            data,
+            config,
             word_controllers: Vec::new(),
-        }
-    }
+            text_direction,
+        };
 
-    fn init_widgets(
-        &mut self,
-        _index: &DynamicIndex,
-        _root: Self::Root,
-        _returned_widget: &gtk::Widget,
-        _sender: FactorySender<Self>,
-    ) -> Self::Widgets {
         let mut word_controllers = Vec::new();
         let word_flow_box = adw::WrapBox::builder()
             .line_spacing(6)
@@ -126,16 +148,18 @@ impl FactoryComponent for VerseModel {
             .halign(gtk::Align::Start)
             .build();
 
-        for word in &self.data.words {
+        for word in &model.data.words {
             let controller = WordModel::builder()
-                .launch((word.clone(), self.config.clone()))
-                .detach();
+                .launch((word.clone(), model.config.clone(), model.text_direction))
+                .forward(sender.input_sender(), move |message| match message {
+                    WordModelOutput::LookUp(text) => VerseInputMessage::LookUp(text),
+                });
 
             word_flow_box.append(controller.widget());
             word_controllers.push(controller);
         }
 
-        self.word_controllers = word_controllers;
+        model.word_controllers = word_controllers;
 
         let word_flow = &word_flow_box;
         let notes_container = adw::WrapBox::builder()
@@ -143,40 +167,36 @@ impl FactoryComponent for VerseModel {
             .hexpand(true)
             .halign(gtk::Align::Start)
             .build();
-        for word in self.data.notes.clone() {
+        for word in model.data.notes.clone() {
             let note_label = gtk::Label::builder()
                 .wrap(true)
                 .margin_end(16)
                 .css_classes(vec!["verse-note"])
                 .build();
             note_label.set_markup(
-                format!("<span size='large' foreground='#d71452'><span size='small' foreground='#c314d7'><i>Note on Verse {}: </i></span><i>{}</i></span>",self.data.number, word).as_str(),
+                format!("<span size='large' foreground='#d71452'><span size='small' foreground='#c314d7'><i>Note on Verse {}: </i></span><i>{}</i></span>",model.data.number, word).as_str(),
             );
 
             notes_container.append(&note_label);
         }
+
         let widgets = view_output!();
 
-        widgets
+        ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, msg: Self::Input, _sender: FactorySender<Self>) {
-        match msg {
-            VerseInputMessage::EnableStrongs => {
-                self.config.show_strongs = true;
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
+        match message {
+            VerseInputMessage::LookUp(text) => {
+                let _ = sender.output(VerseOutputMessage::Lookup(text));
             }
-            VerseInputMessage::DisableStrongs => self.config.show_strongs = false,
-            VerseInputMessage::EnableNotes => self.config.show_notes = true,
-            VerseInputMessage::DisableNotes => self.config.show_notes = false,
-            VerseInputMessage::EnableMorphs => self.config.show_morphs = true,
-            VerseInputMessage::DisableMorphs => self.config.show_morphs = false,
-            VerseInputMessage::EnableLemma => self.config.show_lemma = true,
-            VerseInputMessage::DisableLemma => self.config.show_lemma = false,
-            VerseInputMessage::ChangeFontSize(font_scale) => self.config.font_size = font_scale,
-        }
+            _ => {
+                self.config.write().unwrap().apply_message(&message);
 
-        for controller in &self.word_controllers {
-            controller.emit(WordModelInput::UpdateConfig(self.config.clone()));
+                for controller in &self.word_controllers {
+                    controller.emit(WordModelInput::UpdateConfig(self.config.clone()));
+                }
+            }
         }
     }
 }

@@ -159,7 +159,7 @@ impl Component for LibraryPage {
                             set_active: model.is_sidebar_visible,
 
                             connect_clicked[sender] => move |_| {
-                                sender.output(LibraryPageOutput::ToggleSidebar);
+                                let _ = sender.output(LibraryPageOutput::ToggleSidebar);
                             }
                         }
                     },

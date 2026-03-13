@@ -1,5 +1,8 @@
 pub mod helpers;
-pub mod model;
+pub mod biblepage_model;
 pub mod verse;
 pub mod word;
-pub mod widget_extensions;
+pub mod fonts_extention;
+pub mod bible_page_osis_transilation_engine_ext;
+pub mod display_config_ext;
+pub mod section;

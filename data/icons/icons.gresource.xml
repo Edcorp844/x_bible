@@ -12,5 +12,6 @@
         <file preprocess="xml-stripblanks" alias="bible-read-symbolic.svg">bible-read.svg</file>
         <file preprocess="xml-stripblanks" alias="page-menu-symbolic.svg">page-menu.svg</file>
         <file preprocess="xml-stripblanks" alias="font-letter-symbolic.svg">font-letter.svg</file>
+        <file preprocess="xml-stripblanks" alias="line-height-symbolic.svg">line-height.svg</file>
     </gresource>
 </gresources>

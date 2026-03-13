@@ -2,7 +2,7 @@ use directories::ProjectDirs;
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -78,16 +78,18 @@ impl SwordEngine {
 
     unsafe fn rebuild_mgr(&self, inner: &mut SwordInner) {
         println!("[SwordEngine] Rebuilding SWMgr...");
-        org_crosswire_sword_SWMgr_delete(inner.mgr);
+        unsafe { org_crosswire_sword_SWMgr_delete(inner.mgr) };
 
         let path_str = self.sword_path.to_string_lossy().replace("\\", "/");
         let c_path = CString::new(path_str).unwrap();
 
-        inner.mgr = org_crosswire_sword_SWMgr_newWithPath(c_path.as_ptr());
+        inner.mgr = unsafe { org_crosswire_sword_SWMgr_newWithPath(c_path.as_ptr()) };
 
         let utf8_key = CString::new("UTF8").unwrap();
         let on_val = CString::new("true").unwrap();
-        org_crosswire_sword_SWMgr_setGlobalOption(inner.mgr, utf8_key.as_ptr(), on_val.as_ptr());
+        unsafe {
+            org_crosswire_sword_SWMgr_setGlobalOption(inner.mgr, utf8_key.as_ptr(), on_val.as_ptr())
+        };
         println!("[SwordEngine] SWMgr rebuilt successfully");
     }
 
@@ -165,11 +167,28 @@ impl SwordEngine {
                     if entry.is_null() || (*entry).name.is_null() {
                         break;
                     }
+                    let mut features_vec = Vec::new();
+                    let feature_ptr_ptr = (*entry).features; // *mut *const c_char
+
+                    if !feature_ptr_ptr.is_null() {
+                        let mut i = 0;
+                        // Loop until the pointer at the current offset is null
+                        while !(*feature_ptr_ptr.offset(i)).is_null() {
+                            let feature_c_str = CStr::from_ptr(*feature_ptr_ptr.offset(i));
+                            features_vec.push(feature_c_str.to_string_lossy().into_owned());
+                            i += 1;
+                        }
+                    }
+
                     modules.push(SwordModule {
                         name: self.ptr_to_str((*entry).name),
                         description: self.ptr_to_str((*entry).description),
                         category: self.ptr_to_str((*entry).category),
                         language: self.ptr_to_str((*entry).language),
+                        version: self.ptr_to_str((*entry).version),
+                        delta: self.ptr_to_str((*entry).delta),
+                        cipher_key: self.ptr_to_str((*entry).cipherKey),
+                        features: features_vec,
                     });
                     i += 1;
                 }
@@ -185,39 +204,92 @@ impl SwordEngine {
     pub fn get_modules(&self) -> Vec<SwordModule> {
         let mut modules = Vec::new();
         let inner = self.inner.lock().unwrap();
+
         unsafe {
             let mut ptr = org_crosswire_sword_SWMgr_getModInfoList(inner.mgr);
+
             while !ptr.is_null() && !(*ptr).name.is_null() {
                 let info = *ptr;
+
+                // --- CONVERT FEATURES ARRAY TO VEC<STRING> ---
+                let mut features_vec = Vec::new();
+                let feature_ptr_ptr = info.features; // *mut *const c_char
+
+                if !feature_ptr_ptr.is_null() {
+                    let mut i = 0;
+                    // Loop until the pointer at the current offset is null
+                    while !(*feature_ptr_ptr.offset(i)).is_null() {
+                        let feature_c_str = CStr::from_ptr(*feature_ptr_ptr.offset(i));
+                        features_vec.push(feature_c_str.to_string_lossy().into_owned());
+                        i += 1;
+                    }
+                }
+
                 modules.push(SwordModule {
                     name: self.ptr_to_str(info.name),
                     description: self.ptr_to_str(info.description),
                     category: self.ptr_to_str(info.category),
                     language: self.ptr_to_str(info.language),
+                    version: self.ptr_to_str(info.version),
+                    delta: self.ptr_to_str(info.delta),
+                    cipher_key: self.ptr_to_str(info.cipherKey),
+                    features: features_vec, // Assign the Vec<String> here
                 });
+
                 ptr = ptr.offset(1);
             }
         }
+
         println!("[SwordEngine] Local modules found: {}", modules.len());
         modules
     }
 
     pub fn get_modules_by_category(&self, categories: Vec<&str>) -> Vec<SwordModule> {
-        self.get_modules()
+        let modules = self
+            .get_modules()
             .into_iter()
             .filter(|m| categories.contains(&m.category.as_str()))
-            .collect()
+            .collect();
+
+        println!("MODULES: {:?}", modules);
+
+        modules
     }
 
     pub fn get_bible_modules(&self) -> Vec<SwordModule> {
         self.get_modules_by_category(vec!["Biblical Texts", "Bibles"])
     }
+
     pub fn get_commentary_modules(&self) -> Vec<SwordModule> {
         self.get_modules_by_category(vec!["Commentaries"])
     }
+
     pub fn get_dictionary_modules(&self) -> Vec<SwordModule> {
-        self.get_modules_by_category(vec!["Lexicons", "Dictionaries"])
+        self.get_modules()
+            .into_iter()
+            .filter(|m| {
+                let cat = m.category.to_lowercase();
+                let name = m.name.to_lowercase();
+
+                // 1. Must be a dictionary-type category
+                let is_dict_cat = cat.contains("dict")
+                    || cat.contains("lex")
+                    || cat.contains("gloss")
+                    || cat.contains("daily");
+
+                // 2. Must NOT be a Bible
+                let is_bible = cat.contains("bible") || cat.contains("text");
+
+                // 3. Or it's a known Strong's dictionary name
+                let is_strongs_name = name.contains("strong") && !is_bible;
+
+                // Logic: It must be a dictionary category OR a Strong's named module,
+                // but it absolutely cannot be a Bible text module.
+                (is_dict_cat || is_strongs_name) && !is_bible
+            })
+            .collect()
     }
+
     pub fn get_book_modules(&self) -> Vec<SwordModule> {
         self.get_modules_by_category(vec!["Generic Books"])
     }
@@ -354,6 +426,144 @@ impl SwordEngine {
         books
     }
 
+    // --------------------LOOKUP---------------------
+    pub fn lookup_webster(&self, word: &str) -> String {
+        // 1. Identify the Webster module name (usually "Web1913" or "Webster")
+        let module_name = self.find_dictionary_module(&["Web1913", "Webster"]);
+
+        let Some(name) = module_name else {
+            return "Webster dictionary module not found.".to_string();
+        };
+
+        // 2. Direct lookup (English words don't need prefixes like 'G' or 'H')
+        let result = self.get_dictionary_entry(&name, word);
+
+        if result.starts_with("NOT_FOUND") {
+            format!("No Webster definition found for '{}'.", word)
+        } else {
+            result
+        }
+    }
+
+    pub fn lookup_definition(&self, key: &str) -> String {
+        // 1. IMMEDIATE PRINT to verify the function is reached
+        println!("\n[DEBUG] Dictionary Engine reached with key: '{}'", key);
+
+        let is_greek = key.starts_with('G');
+        let is_hebrew = key.starts_with('H');
+
+        // Extract numbers only: "H01961" -> "1961"
+        let numeric_part: String = key.chars().filter(|c| c.is_ascii_digit()).collect();
+        let prefix = if is_greek {
+            "G"
+        } else if is_hebrew {
+            "H"
+        } else {
+            ""
+        };
+        let num_val = numeric_part.parse::<u32>().unwrap_or(0);
+
+        // 2. Select Module
+        let module_name = if is_greek {
+            self.find_dictionary_module(&["StrongsGreek", "StrongsRealGreek"])
+        } else if is_hebrew {
+            self.find_dictionary_module(&["StrongsHebrew", "StrongsRealHebrew"])
+        } else {
+            None
+        };
+
+        let Some(name) = module_name else {
+            println!("[DEBUG] Error: No dictionary modules found for language.");
+            return "No dictionary modules found.".to_string();
+        };
+
+        println!("[DEBUG] Using module: '{}'", name);
+
+        // 3. Define attempts
+        let attempts = vec![
+            numeric_part.clone(),                // "1961"
+            format!("{}{}", prefix, num_val),    // "H1961"
+            format!("{}{:04}", prefix, num_val), // "H1961"
+            format!("{}{:05}", prefix, num_val), // "H01961"
+        ];
+
+        // 4. Trial Loop
+        for attempt in attempts {
+            println!(
+                "[DEBUG] Trying key format: '{}' on module '{}'",
+                attempt, name
+            );
+            let result = self.get_dictionary_entry(&name, &attempt);
+
+            // If the result doesn't start with our internal "NOT_FOUND" marker, we found it!
+            if !result.starts_with("NOT_FOUND") {
+                println!("[DEBUG] SUCCESS! Found entry for '{}'", attempt);
+                return result;
+            }
+        }
+
+        format!("Entry for '{}' not found in {}.", key, name)
+    }
+
+    fn find_dictionary_module(&self, preferences: &[&str]) -> Option<String> {
+        let inner = self.inner.lock().unwrap();
+
+        // Try preferred list first
+        for pref in preferences {
+            let c_pref = CString::new(*pref).unwrap();
+            unsafe {
+                let module = org_crosswire_sword_SWMgr_getModuleByName(inner.mgr, c_pref.as_ptr());
+                if module != 0 {
+                    return Some(pref.to_string());
+                }
+            }
+        }
+
+        // Fallback: Just return the first module that is actually a dictionary
+        // For now, we'll return None if preferences fail to keep it simple
+        None
+    }
+
+    fn get_dictionary_entry(&self, module_name: &str, key: &str) -> String {
+        let inner = self.inner.lock().unwrap();
+        let c_mod = CString::new(module_name).unwrap();
+        let c_key = CString::new(key).unwrap();
+
+        unsafe {
+            let module_ptr = org_crosswire_sword_SWMgr_getModuleByName(inner.mgr, c_mod.as_ptr());
+            if module_ptr == 0 {
+                return format!("NOT_FOUND: Module '{}' not found", module_name);
+            }
+
+            // 1. Force the key into the module
+            org_crosswire_sword_SWModule_setKeyText(module_ptr, c_key.as_ptr());
+
+            // 2. Check for Error: SWORD uses an Error object or a return code
+            // to signal if a key is 'Out of Bounds'.
+            // If your FFI has 'SWModule_error', check it here.
+
+            // 3. IMPORTANT: Some modules require 'getRawEntry' to trigger the load
+            let raw_ptr = org_crosswire_sword_SWModule_getRawEntry(module_ptr);
+            if raw_ptr.is_null() || *raw_ptr == 0 {
+                return format!("NOT_FOUND: No raw data for key '{}'", key);
+            }
+
+            // 4. Render the text
+            let text_ptr = org_crosswire_sword_SWModule_getRawEntry(module_ptr); //renderText(module_ptr);
+            if text_ptr.is_null() {
+                return "NOT_FOUND: Render returned null".to_string();
+            }
+
+            let text = CStr::from_ptr(text_ptr).to_string_lossy().into_owned();
+
+            if text.is_empty() {
+                "NOT_FOUND: Empty result".to_string()
+            } else {
+                text
+            }
+        }
+    }
+
     // ------------------- HELPERS -------------------
 
     fn ptr_to_str(&self, ptr: *const i8) -> String {
@@ -385,6 +595,7 @@ impl SwordEngine {
         let _ = fs::create_dir_all(&remote_sources);
 
         let abs_path_str = path.to_string_lossy().replace("\\", "/");
+        println!("absolute path: {}", abs_path_str);
         let conf_path = path.join("sword.conf");
 
         // Use the absolute path for DataPath.

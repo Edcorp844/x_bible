@@ -1,5 +1,6 @@
 use adw::prelude::*;
 use relm4::prelude::*;
+use std::fmt::Debug;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::features::core::{
@@ -7,7 +8,7 @@ use crate::features::core::{
     module_engine::sword_engine::SwordEngine,
     pages::{
         library::library_page::{LibraryPage, LibraryPageCategory, LibraryPageOutput},
-        store::store_page::{StorePageOutput, StorePage},
+        store::store_page::{StorePage, StorePageOutput},
         study::study_page::{StudyPage, StudyPageOutPut},
     },
 };
@@ -138,7 +139,7 @@ impl SimpleComponent for AppModel {
                         NavigationPage::Bible => {
                             let bible_page = PageController::Bible(
                                 StudyPage::builder()
-                                    .launch((self.engine.clone(), false))
+                                    .launch((self.engine.clone(), self.is_sidebar_visible.clone()))
                                     .forward(sender.input_sender(), |message| match message {
                                         StudyPageOutPut::ToggleSidebar => {
                                             AppInputMessage::ToggleSidebar
@@ -166,7 +167,9 @@ impl SimpleComponent for AppModel {
                             let store_page = StorePage::builder()
                                 .launch((self.engine.clone(), self.is_sidebar_visible))
                                 .forward(sender.input_sender(), |message| match message {
-                                    StorePageOutput::ToggleSidebar => AppInputMessage::ToggleSidebar,
+                                    StorePageOutput::ToggleSidebar => {
+                                        AppInputMessage::ToggleSidebar
+                                    }
                                 });
 
                             self.pages_cache

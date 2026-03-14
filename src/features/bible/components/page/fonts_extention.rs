@@ -3,7 +3,7 @@ use gtk::prelude::*;
 use crate::features::bible::components::page::{
     biblepage_model::{BiblePage, StudyInput},
     helpers::AvailableFonts,
-    verse::VerseInputMessage,
+    verse_components::verse::VerseInputMessage,
 };
 
 impl BiblePage {

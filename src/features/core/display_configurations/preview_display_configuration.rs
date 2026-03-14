@@ -2,7 +2,7 @@ use crate::features::{
     bible::components::{
         page::{
             helpers::{AddedWordStyle, AvailableFonts},
-            verse::VerseInputMessage,
+            verse_components::verse::VerseInputMessage,
         },
         page_theme::theme_data::ThemePreset,
     },

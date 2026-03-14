@@ -3,9 +3,7 @@ use relm4::prelude::*;
 
 use crate::features::{
     bible::components::page::{
-        helpers::{Section, TitleStyle},
-        verse::{VerseInputMessage, VerseModel, VerseOutputMessage},
-        word::{WordModel, WordModelInput},
+        helpers::{Section, TitleStyle}, verse_components::verse::{VerseInputMessage, VerseModel, VerseOutputMessage}, word::{WordModel, WordModelInput}
     },
     core::display_configurations::Config::TextConfig,
 };

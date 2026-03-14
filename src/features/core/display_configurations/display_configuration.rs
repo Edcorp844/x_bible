@@ -1,6 +1,6 @@
 use crate::features::bible::components::page::{
     helpers::{AddedWordStyle, AvailableFonts},
-    verse::VerseInputMessage,
+    verse_components::verse::VerseInputMessage,
 };
 
 pub trait DisplayConfig {

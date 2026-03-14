@@ -7,7 +7,7 @@ use crate::features::bible::components::page::helpers::{AddedWordStyle, PageDisp
 use crate::features::bible::components::page::section::{
     SectionInput, SectionModel, SectionOutput,
 };
-use crate::features::bible::components::page::verse::VerseInputMessage;
+use crate::features::bible::components::page::verse_components::verse::VerseInputMessage;
 use crate::features::bible::components::page_theme::customize_theme_popup::{
     CustomizeThemeOutput, CustomizeThemePopup,
 };

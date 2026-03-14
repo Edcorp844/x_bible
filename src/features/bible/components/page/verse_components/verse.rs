@@ -4,6 +4,9 @@ use relm4::prelude::*;
 use crate::features::{
     bible::components::page::{
         helpers::{AvailableFonts, Verse},
+        verse_components::{
+            annotation_colors::AnnotationColor, verse_menu_button::VerseMenuButton,
+        },
         word::{WordModel, WordModelInput, WordModelOutput},
     },
     core::display_configurations::Config::TextConfig,
@@ -35,6 +38,7 @@ pub enum VerseInputMessage {
     ChangeJustify(bool),
     PutChristWordsInRed(bool),
     LookUp(String),
+    OpenMenu { x: f64, y: f64 },
 }
 
 #[derive(Debug, Clone)]
@@ -44,10 +48,11 @@ pub enum VerseOutputMessage {
 
 // --- VERSE FACTORY ---
 #[relm4::component(pub)]
-impl SimpleComponent for VerseModel {
+impl Component for VerseModel {
     type Init = (Verse, TextConfig, gtk::TextDirection);
     type Input = VerseInputMessage;
     type Output = VerseOutputMessage;
+    type CommandOutput = ();
 
     view! {
         #[root]
@@ -56,6 +61,57 @@ impl SimpleComponent for VerseModel {
             set_spacing: 12,
             set_hexpand: true,
             add_css_class: "verse-root",
+
+
+            #[name = "verse_popover"]
+                gtk::Popover {
+                    set_has_arrow: true,
+                    set_autohide: true,
+
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_width_request: 380,
+                        set_height_request: 150,
+                        set_margin_all: 5,
+
+                        gtk::Label{
+                            set_xalign: 0.0,
+                            set_markup: &format!(
+                                "<b>{}</b>",
+                            model.data.osis_id.as_str()
+                            ),
+                        },
+
+                        #[name = "swatch_container"]
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Horizontal,
+                            set_spacing: 12,
+                            set_halign: gtk::Align::Center,
+                            set_hexpand: true,
+                            set_margin_all: 12,
+                        },
+
+                        #[name = "view_stack"]
+                        adw::ViewStack {
+                            set_vexpand: true,
+                        },
+
+                        #[name = "view_switcher"]
+                        adw::InlineViewSwitcher {
+                            //set_policy: adw::ViewSwitcherPolicy::Wide,
+                            add_css_class: "round",
+                        }
+                    }
+                },
+
+            add_controller = gtk::GestureClick {
+                set_button: 3, // 3 is Right Click
+                connect_released[sender] => move |gesture, _, x, y| {
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                    // Send the coordinates to the update function
+                    sender.input(VerseInputMessage::OpenMenu { x, y });
+                }
+            },
 
             // 1. Verse Number - Aligned to the top to stay fixed
             gtk::Label {
@@ -93,11 +149,9 @@ impl SimpleComponent for VerseModel {
                     set_transition_type: gtk::RevealerTransitionType::SlideDown,
                     set_transition_duration: 350,
 
-                    // Triggers the slide animation
                     #[watch]
                     set_reveal_child: !model.data.notes.is_empty() && model.config.read().unwrap().show_notes(),
 
-                    // Ensures the revealer doesn't block layout when hidden
                     #[watch]
                     set_visible: !model.data.notes.is_empty(),
 
@@ -182,11 +236,70 @@ impl SimpleComponent for VerseModel {
 
         let widgets = view_output!();
 
+        let colors = vec![
+            "var(--blue-3)",
+            "var(--yellow-3)",
+            "var(--green-3)",
+            "var(--orange-3)",
+            "var(--red-3)",
+            "var(--purple-3)",
+            "var(--brown-3)",
+            "var(--green-1)",
+        ];
+
+        for hex in colors {
+            let swatch = AnnotationColor::builder().launch(hex.to_string()).detach(); /*forward(
+            sender.input_sender(),
+            |output| match output {
+            AnnotationOutput::Selected(c) => VerseInputMessage::AnnotateVerse(c),
+            },
+            );*/
+
+            // swatch_container is a gtk::Box you defined for your stack page
+            widgets.swatch_container.append(swatch.widget());
+        }
+
+        // --- CONNECT WIDGETS MANUALLY HERE ---
+        // This avoids the 'unrecognized identifier' error in the view macro
+        widgets.view_switcher.set_stack(Some(&widgets.view_stack));
+
+        // Adding Stack Pages
+        widgets.view_stack.add_titled_with_icon(
+            &Self::make_annotation_menu(),
+            Some("lex"),
+            "Annotate",
+            "accessories-dictionary-symbolic",
+        );
+        widgets.view_stack.add_titled_with_icon(
+            &gtk::Label::new(Some("Study Content")),
+            Some("study"),
+            "Study",
+            "emblem-documents-symbolic",
+        );
+        widgets.view_stack.add_titled_with_icon(
+            &gtk::Label::new(Some("Share Content")),
+            Some("share"),
+            "Share",
+            "emblem-shared-symbolic",
+        );
+
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
+    fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        message: Self::Input,
+        sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
         match message {
+            VerseInputMessage::OpenMenu { x, y } => {
+                widgets
+                    .verse_popover
+                    .set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+                widgets.verse_popover.popup();
+            }
             VerseInputMessage::LookUp(text) => {
                 let _ = sender.output(VerseOutputMessage::Lookup(text));
             }
@@ -198,5 +311,42 @@ impl SimpleComponent for VerseModel {
                 }
             }
         }
+    }
+}
+
+impl VerseModel {
+    fn make_annotation_menu() -> gtk::Box {
+        // 1. Create the container with centering and expansion
+        let container = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(20) // Breathable space between buttons
+            .halign(gtk::Align::Center)
+            .hexpand(true)
+            .margin_top(10)
+            .margin_bottom(10)
+            .build();
+
+        // 2. Define your options (Label, Icon Name)
+        let options = vec![
+            ("Note", "edit-paste-symbolic"),
+            ("Bookmark", "bookmark-new-symbolic"),
+        ];
+
+        for (label, icon) in options {
+            // 3. Launch the component
+            let controller = VerseMenuButton::builder()
+                .launch((label.to_string(), icon.to_string()))
+                .detach(); // Detach since we aren't handling internal messages here yet
+
+            let widget = controller.widget();
+
+            // 4. Ensure each button assembly takes up even space
+            widget.set_hexpand(true);
+            widget.set_halign(gtk::Align::Center);
+
+            container.append(widget);
+        }
+
+        container
     }
 }

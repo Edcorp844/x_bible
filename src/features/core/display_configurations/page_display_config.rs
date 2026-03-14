@@ -3,14 +3,13 @@ use std::fmt::Debug;
 use crate::features::{
     bible::components::page::{
         helpers::{AddedWordStyle, AvailableFonts, PageDisplayConfig},
-        verse::VerseInputMessage,
+        verse_components::verse::VerseInputMessage,
     },
     core::{
         core::AppSetting::AppSetting, display_configurations::display_configuration::DisplayConfig,
     },
 };
 use gtk::gio::prelude::SettingsExt;
-use quick_xml::reader::Config;
 
 impl AppSetting for PageDisplayConfig {
     fn schema_id() -> &'static str {
@@ -183,7 +182,7 @@ impl DisplayConfig for PageDisplayConfig {
             }
             VerseInputMessage::ChangeJustify(justify) => self.set_justify(*justify),
             VerseInputMessage::ChangeBoldFont(bold_font) => self.set_bold_font(*bold_font),
-            VerseInputMessage::PutChristWordsInRed(value)=>self.set_christ_words_red(*value),
+            VerseInputMessage::PutChristWordsInRed(value) => self.set_christ_words_red(*value),
             VerseInputMessage::UpdateDisplayConf(config) => {
                 let config = config.read().unwrap();
                 self.set_line_spacing(config.line_spacing());

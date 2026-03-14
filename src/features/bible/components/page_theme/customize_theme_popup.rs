@@ -8,7 +8,7 @@ use crate::features::{
         page::{
             helpers::AvailableFonts,
             section::{SectionInput, SectionModel},
-            verse::VerseInputMessage,
+            verse_components::verse::VerseInputMessage,
         },
         page_theme::theme_data::ThemePreset,
     },

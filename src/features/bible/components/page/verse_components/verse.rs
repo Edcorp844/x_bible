@@ -282,13 +282,13 @@ impl Component for VerseModel {
             "accessories-dictionary-symbolic",
         );
         widgets.view_stack.add_titled_with_icon(
-            &gtk::Label::new(Some("Study Content")),
+            &Self::make_study_menu(),
             Some("study"),
             "Study",
             "emblem-documents-symbolic",
         );
         widgets.view_stack.add_titled_with_icon(
-            &gtk::Label::new(Some("Share Content")),
+            &Self::make_share_menu(),
             Some("share"),
             "Share",
             "emblem-shared-symbolic",
@@ -338,6 +338,79 @@ impl Component for VerseModel {
 
 impl VerseModel {
     fn make_annotation_menu() -> gtk::Box {
+        // 1. Create the container with centering and expansion
+        let container = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(10) // Breathable space between buttons
+            .halign(gtk::Align::Center)
+            .hexpand(true)
+            .margin_top(10)
+            .margin_bottom(10)
+            .build();
+
+        // 2. Define your options (Label, Icon Name)
+        let options = vec![
+            ("Note", "document-new-symbolic"), // Standard for a text note/annotation
+            ("Tag", "mail-attachment-symbolic"), // Distinct tag shape
+            ("Link", "insert-link-symbolic"),  // Standard chain link icon
+            ("Bookmark", "bookmark-new-symbolic"), // Keep this, it's correct
+        ];
+
+        for (label, icon) in options {
+            // 3. Launch the component
+            let controller = VerseMenuButton::builder()
+                .launch((label.to_string(), icon.to_string()))
+                .detach(); // Detach since we aren't handling internal messages here yet
+
+            let widget = controller.widget();
+
+            // 4. Ensure each button assembly takes up even space
+            widget.set_hexpand(true);
+            widget.set_halign(gtk::Align::Center);
+
+            container.append(widget);
+        }
+
+        container
+    }
+
+    fn make_share_menu() -> gtk::Box {
+        // 1. Create the container with centering and expansion
+        let container = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(10) // Breathable space between buttons
+            .halign(gtk::Align::Center)
+            .hexpand(true)
+            .margin_top(10)
+            .margin_bottom(10)
+            .build();
+
+        // 2. Define your options (Label, Icon Name)
+        let options = vec![
+            ("Copy", "edit-copy-symbolic"),
+            ("Share", "emblem-shared-symbolic"),
+            ("Select", "selection-mode-symbolic"),
+        ];
+
+        for (label, icon) in options {
+            // 3. Launch the component
+            let controller = VerseMenuButton::builder()
+                .launch((label.to_string(), icon.to_string()))
+                .detach(); // Detach since we aren't handling internal messages here yet
+
+            let widget = controller.widget();
+
+            // 4. Ensure each button assembly takes up even space
+            widget.set_hexpand(true);
+            widget.set_halign(gtk::Align::Center);
+
+            container.append(widget);
+        }
+
+        container
+    }
+
+    fn make_study_menu() -> gtk::Box {
         // 1. Create the container with centering and expansion
         let container = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)

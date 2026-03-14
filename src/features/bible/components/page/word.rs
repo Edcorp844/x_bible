@@ -2,7 +2,10 @@ use adw::prelude::*;
 use relm4::prelude::*;
 
 use crate::features::{
-    bible::components::page::helpers::{AddedWordStyle, AvailableFonts, SegmentStyle, Word},
+    bible::components::page::{
+        helpers::{AddedWordStyle, AvailableFonts, SegmentStyle, Word},
+        verse_components::verse_annotation::VerseAnnotation,
+    },
     core::display_configurations::Config::TextConfig,
 };
 
@@ -10,12 +13,14 @@ pub struct WordModel {
     data: Word,
     config: TextConfig,
     text_direction: gtk::TextDirection,
+    annotation: VerseAnnotation,
 }
 
 #[derive(Debug)]
 pub enum WordModelInput {
     LookUp,
     UpdateConfig(TextConfig),
+    UpdateAnnotation(VerseAnnotation),
 }
 
 #[derive(Debug)]
@@ -25,7 +30,7 @@ pub enum WordModelOutput {
 
 #[relm4::component(pub)]
 impl SimpleComponent for WordModel {
-    type Init = (Word, TextConfig, gtk::TextDirection);
+    type Init = (Word, TextConfig, gtk::TextDirection, VerseAnnotation);
     type Input = WordModelInput;
     type Output = WordModelOutput;
 
@@ -55,6 +60,11 @@ impl SimpleComponent for WordModel {
                     #[track(true)]
                     set_direction: model.text_direction,
                     set_xalign: 0.0,
+                    #[watch]
+                    inline_css: &format!(
+                        "background-color: {}; border-radius: 6px;",
+                        model.annotation.color.as_deref().unwrap_or("transparent")
+                    ),
                 },
             },
 
@@ -136,6 +146,7 @@ impl SimpleComponent for WordModel {
             data: init.0,
             config: init.1,
             text_direction: init.2,
+            annotation: init.3,
         };
 
         let morph_box = model.get_morphs_widget();
@@ -155,6 +166,9 @@ impl SimpleComponent for WordModel {
         match msg {
             WordModelInput::UpdateConfig(new_config) => {
                 self.config = new_config;
+            }
+            WordModelInput::UpdateAnnotation(annotation) => {
+                self.annotation = annotation;
             }
             WordModelInput::LookUp => {
                 if let Some(lex) = &self.data.lex {

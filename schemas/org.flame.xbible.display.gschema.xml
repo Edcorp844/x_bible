@@ -1,71 +1,64 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
     <schema id="org.flame.xbible.display" path="/org/flame/xbible/display/">
-
         <key name="show-strongs" type="b">
             <default>false</default>
             <summary>Show Strong's Numbers</summary>
         </key>
-
         <key name="show-morphs" type="b">
             <default>false</default>
             <summary>Show Morphology</summary>
         </key>
-
         <key name="show-lemma" type="b">
             <default>false</default>
             <summary>Show Lemma</summary>
         </key>
-
         <key name="show-notes" type="b">
             <default>false</default>
             <summary>Show Footnotes</summary>
         </key>
-
         <key name="added-style" type="s">
             <default>'Brackets'</default>
             <summary>Style for added words (e.g., Brackets, Italics)</summary>
         </key>
-
         <key name="font-size" type="d">
             <default>16.0</default>
             <summary>Main font size</summary>
         </key>
-
         <key name="font-family" type="s">
             <default>'System'</default>
             <summary>Selected font face name</summary>
         </key>
-
         <key name="line-spacing" type="d">
             <default>1.5</default>
             <summary>Selected font line spacing</summary>
         </key>
-
         <key name="word-spacing" type="d">
             <default>10</default>
             <summary>Selected font word spacing</summary>
         </key>
-
         <key name="bold-font" type="b">
             <default>false</default>
             <summary>Bold the font</summary>
         </key>
-
-         <key name="justify" type="b">
+        <key name="justify" type="b">
             <default>false</default>
             <summary>Justify the page content</summary>
         </key>
-
-         <key name="page-theme" type="s">
+        <key name="page-theme" type="s">
             <default>'Default'</default>
             <summary>Page theme that determines colors and font settings</summary>
         </key>
-
-         <key name="christ-red-words" type="b">
+        <key name="christ-red-words" type="b">
             <default>false</default>
             <summary>Christ words in red</summary>
         </key>
-
+    </schema>
+    <schema id="org.flame.xbible.verseannotaion" path="/org/flame/xbible/verseannotaion/">
+        <key name="verse-annotations" type="s">
+            <default>"{}"</default>
+            <summary>All verse metadata</summary>
+            <description>JSON map of VerseID to Annotation object (color, notes, bookmarks).</description>
+        </key>
     </schema>
 </schemalist>

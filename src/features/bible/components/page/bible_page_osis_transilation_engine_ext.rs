@@ -12,7 +12,7 @@ impl BiblePage {
         let mut guard = self.sections.guard();
         guard.clear();
         for section in sections {
-            guard.push_back((section, self.config.clone()));
+            guard.push_back((section, self.config.clone(), self.annotations.clone()));
         }
     }
 

@@ -8,6 +8,9 @@ use crate::features::bible::components::page::section::{
     SectionInput, SectionModel, SectionOutput,
 };
 use crate::features::bible::components::page::verse_components::verse::VerseInputMessage;
+use crate::features::bible::components::page::verse_components::verse_annotation::{
+    AnnotationSettings, Annotations,
+};
 use crate::features::bible::components::page_theme::customize_theme_popup::{
     CustomizeThemeOutput, CustomizeThemePopup,
 };
@@ -19,6 +22,7 @@ pub struct BiblePage {
     pub(crate) sections: FactoryVecDeque<SectionModel>,
     pub(crate) config: TextConfig,
     pub(crate) customize_theme_popup: Option<Controller<CustomizeThemePopup>>,
+    pub(crate) annotations: Annotations,
 }
 
 #[derive(Debug)]
@@ -34,7 +38,7 @@ pub enum StudyInput {
 #[derive(Debug)]
 pub enum StudyPageOutput {
     ChangeTheme,
-     LookupSelectedStrong(String),
+    LookupSelectedStrong(String),
 }
 
 #[relm4::component(pub)]
@@ -407,6 +411,7 @@ impl Component for BiblePage {
             sections,
             config: Arc::new(RwLock::new(PageDisplayConfig::new())),
             customize_theme_popup: None,
+            annotations: AnnotationSettings::load_all(),
         };
 
         let section_list = model.sections.widget();

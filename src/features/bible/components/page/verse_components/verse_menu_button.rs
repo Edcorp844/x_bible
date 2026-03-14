@@ -21,6 +21,7 @@ impl Component for VerseMenuButton {
 
             gtk::ToggleButton{
                 set_icon_name: model.icon.as_str(),
+                set_halign: gtk::Align::Center,
             },
 
             gtk::Label{

@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use adw::prelude::*;
 use relm4::{Component, ComponentParts, prelude::FactoryVecDeque, prelude::*};
@@ -118,7 +121,7 @@ impl Component for CustomizeThemePopup {
                                     #[wrap(Some)]
                                     #[local_ref]
                                     set_child =  preview_widget -> gtk::Box {
-                                        set_orientation: gtk::Orientation::Horizontal, 
+                                        set_orientation: gtk::Orientation::Horizontal,
                                         set_spacing: 5,
                                         set_valign: gtk::Align::Start,
                                         set_vexpand: true,
@@ -525,7 +528,7 @@ impl CustomizeThemePopup {
         let mut guard = self.preview.guard();
         guard.clear();
         for verse in verses {
-            guard.push_back((verse, self.config.clone()));
+            guard.push_back((verse, self.config.clone(), HashMap::new()));
         }
     }
 

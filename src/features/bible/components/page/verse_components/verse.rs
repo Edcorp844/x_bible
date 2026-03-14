@@ -5,7 +5,9 @@ use crate::features::{
     bible::components::page::{
         helpers::{AvailableFonts, Verse},
         verse_components::{
-            annotation_colors::AnnotationColor, verse_menu_button::VerseMenuButton,
+            annotation_colors::{AnnotationColor, AnnotationOutput},
+            verse_annotation::{AnnotationSettings, VerseAnnotation},
+            verse_menu_button::VerseMenuButton,
         },
         word::{WordModel, WordModelInput, WordModelOutput},
     },
@@ -17,6 +19,7 @@ pub struct VerseModel {
     pub config: TextConfig,
     pub word_controllers: Vec<Controller<WordModel>>,
     pub text_direction: gtk::TextDirection,
+    pub annotation: VerseAnnotation,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +42,9 @@ pub enum VerseInputMessage {
     PutChristWordsInRed(bool),
     LookUp(String),
     OpenMenu { x: f64, y: f64 },
+
+    //======verse annotaions messages=====
+    Highlight(String),
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +55,7 @@ pub enum VerseOutputMessage {
 // --- VERSE FACTORY ---
 #[relm4::component(pub)]
 impl Component for VerseModel {
-    type Init = (Verse, TextConfig, gtk::TextDirection);
+    type Init = (Verse, TextConfig, gtk::TextDirection, VerseAnnotation);
     type Input = VerseInputMessage;
     type Output = VerseOutputMessage;
     type CommandOutput = ();
@@ -61,7 +67,6 @@ impl Component for VerseModel {
             set_spacing: 12,
             set_hexpand: true,
             add_css_class: "verse-root",
-
 
             #[name = "verse_popover"]
                 gtk::Popover {
@@ -186,13 +191,14 @@ impl Component for VerseModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let (data, config, text_direction) = init;
+        let (data, config, text_direction, annotation) = init;
 
         let mut model = Self {
             data,
             config,
             word_controllers: Vec::new(),
             text_direction,
+            annotation: annotation.clone(),
         };
 
         let mut word_controllers = Vec::new();
@@ -204,7 +210,12 @@ impl Component for VerseModel {
 
         for word in &model.data.words {
             let controller = WordModel::builder()
-                .launch((word.clone(), model.config.clone(), model.text_direction))
+                .launch((
+                    word.clone(),
+                    model.config.clone(),
+                    model.text_direction,
+                    annotation.clone(),
+                ))
                 .forward(sender.input_sender(), move |message| match message {
                     WordModelOutput::LookUp(text) => VerseInputMessage::LookUp(text),
                 });
@@ -237,6 +248,7 @@ impl Component for VerseModel {
         let widgets = view_output!();
 
         let colors = vec![
+            "transparent",
             "var(--blue-3)",
             "var(--yellow-3)",
             "var(--green-3)",
@@ -244,16 +256,15 @@ impl Component for VerseModel {
             "var(--red-3)",
             "var(--purple-3)",
             "var(--brown-3)",
-            "var(--green-1)",
         ];
 
         for hex in colors {
-            let swatch = AnnotationColor::builder().launch(hex.to_string()).detach(); /*forward(
-            sender.input_sender(),
-            |output| match output {
-            AnnotationOutput::Selected(c) => VerseInputMessage::AnnotateVerse(c),
-            },
-            );*/
+            let swatch = AnnotationColor::builder().launch(hex.to_string()).forward(
+                sender.input_sender(),
+                |output| match output {
+                    AnnotationOutput::Selected(color) => VerseInputMessage::Highlight(color),
+                },
+            );
 
             // swatch_container is a gtk::Box you defined for your stack page
             widgets.swatch_container.append(swatch.widget());
@@ -303,6 +314,17 @@ impl Component for VerseModel {
             VerseInputMessage::LookUp(text) => {
                 let _ = sender.output(VerseOutputMessage::Lookup(text));
             }
+
+            // ===== verse menu ======
+            VerseInputMessage::Highlight(color) => {
+                println!("hightlighting {} with color {}", self.data.osis_id, color);
+                self.annotation.color = Some(color);
+                AnnotationSettings::save_verse(&self.data.osis_id, self.annotation.clone());
+
+                for controller in &self.word_controllers {
+                    controller.emit(WordModelInput::UpdateAnnotation(self.annotation.clone()));
+                }
+            }
             _ => {
                 self.config.write().unwrap().apply_message(&message);
 
@@ -319,7 +341,7 @@ impl VerseModel {
         // 1. Create the container with centering and expansion
         let container = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .spacing(20) // Breathable space between buttons
+            .spacing(10) // Breathable space between buttons
             .halign(gtk::Align::Center)
             .hexpand(true)
             .margin_top(10)
@@ -328,8 +350,10 @@ impl VerseModel {
 
         // 2. Define your options (Label, Icon Name)
         let options = vec![
-            ("Note", "edit-paste-symbolic"),
-            ("Bookmark", "bookmark-new-symbolic"),
+            ("Note", "document-new-symbolic"), // Standard for a text note/annotation
+            ("Tag", "mail-attachment-symbolic"),  // Distinct tag shape
+            ("Link", "insert-link-symbolic"),     // Standard chain link icon
+            ("Bookmark", "bookmark-new-symbolic"), // Keep this, it's correct
         ];
 
         for (label, icon) in options {

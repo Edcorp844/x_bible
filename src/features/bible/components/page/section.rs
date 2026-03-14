@@ -3,7 +3,12 @@ use relm4::prelude::*;
 
 use crate::features::{
     bible::components::page::{
-        helpers::{Section, TitleStyle}, verse_components::verse::{VerseInputMessage, VerseModel, VerseOutputMessage}, word::{WordModel, WordModelInput}
+        helpers::{Section, TitleStyle},
+        verse_components::{
+            verse::{VerseInputMessage, VerseModel, VerseOutputMessage},
+            verse_annotation::{Annotations, VerseAnnotation},
+        },
+        word::{WordModel, WordModelInput},
     },
     core::display_configurations::Config::TextConfig,
 };
@@ -13,6 +18,7 @@ pub struct SectionModel {
     pub config: TextConfig,
     pub verses: Vec<Controller<VerseModel>>,
     pub title_word_controllers: Vec<Controller<WordModel>>,
+    pub annotations: Annotations,
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +34,7 @@ pub enum SectionOutput {
 
 #[relm4::factory(pub)]
 impl FactoryComponent for SectionModel {
-    type Init = (Section, TextConfig);
+    type Init = (Section, TextConfig, Annotations);
     type Input = SectionInput;
     type Output = SectionOutput;
     type CommandOutput = ();
@@ -73,13 +79,14 @@ impl FactoryComponent for SectionModel {
     }
 
     fn init_model(init: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
-        let (section_data, config) = init;
+        let (section_data, config, annotations) = init;
 
         Self {
             data: section_data,
             config,
             verses: Vec::new(),
             title_word_controllers: Vec::new(),
+            annotations,
         }
     }
 
@@ -101,6 +108,7 @@ impl FactoryComponent for SectionModel {
                     word.clone(),
                     self.config.clone(),
                     self.data.text_direction.to_gtk_text_direction(),
+                    VerseAnnotation::new(),
                 ))
                 .detach();
 
@@ -116,11 +124,18 @@ impl FactoryComponent for SectionModel {
         let mut verses_controllers = Vec::new();
 
         for verse in &self.data.verses {
+            let annotation = self
+                .annotations
+                .get(&verse.osis_id)
+                .cloned()
+                .unwrap_or_default();
+
             let controller = VerseModel::builder()
                 .launch((
                     verse.clone(),
                     self.config.clone(),
                     self.data.text_direction.to_gtk_text_direction(),
+                    annotation,
                 ))
                 .forward(sender.input_sender(), move |message| match message {
                     VerseOutputMessage::Lookup(text) => SectionInput::Lookup(text),

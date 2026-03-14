@@ -20,7 +20,6 @@ impl Component for AnnotationColor {
 
     view! {
         #[root]
-        // Using a Box/Frame is much more stable for dynamic background colors
         #[name = "swatch"]
         gtk::Box {
             set_width_request: 32,

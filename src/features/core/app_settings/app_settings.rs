@@ -1,7 +1,6 @@
 pub mod AppSetting {
 
     use gtk::gio::Settings;
-    use gtk::gio::prelude::*;
 
     pub trait AppSetting {
         /// The unique ID defined in the schema XML

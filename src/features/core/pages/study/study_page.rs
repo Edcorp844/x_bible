@@ -141,12 +141,6 @@ impl Component for StudyPage {
                                 set_vexpand: true,
 
                                 add_titled: (
-                                    &gtk::Label::new(Some("Lexicon")),
-                                    Some("lex"),
-                                    "Lexicon"
-                                ),
-
-                                add_titled: (
                                     model.dictionary_page.widget(),
                                     Some("dict"),
                                     "Dictionary"
@@ -164,14 +158,6 @@ impl Component for StudyPage {
                                     Some("Comm"),
                                     "Commentaries"
                                 ),
-
-                                add_titled: (
-                                    &gtk::Label::new(Some("Compare")),
-                                    Some("Comp"),
-                                    "Compare"
-                                ),
-
-                                // Page 3: Lexicon
 
                             }
                         }

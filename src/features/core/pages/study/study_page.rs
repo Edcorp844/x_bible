@@ -11,6 +11,7 @@ use crate::features::{
         display_configurations::Config::TextConfig,
         module_engine::{
             sword_engine::SwordEngine,
+            sword_engine_dictionary_ext::DictionaryQuery,
             sword_module::{ModuleBook, SwordModule},
         },
     },
@@ -44,7 +45,7 @@ pub enum StudyPageInput {
     UpdateModule(u32),
     UpdateBook(u32),
     UpdateChapter(u32),
-    LookupSelectedStrong(String),
+    LookupSelectedStrong(DictionaryQuery),
     UpdateTheme,
 }
 
@@ -197,8 +198,8 @@ impl Component for StudyPage {
             ))
             .forward(sender.input_sender(), move |msg| match msg {
                 StudyPageOutput::ChangeTheme => StudyPageInput::UpdateTheme,
-                StudyPageOutput::LookupSelectedStrong(text) => {
-                    StudyPageInput::LookupSelectedStrong(text)
+                StudyPageOutput::LookupSelectedStrong(query) => {
+                    StudyPageInput::LookupSelectedStrong(query)
                 }
             });
 
@@ -286,9 +287,9 @@ impl Component for StudyPage {
                     .add_css_class(&format!("preview-area-{}", theme));
             }
 
-            StudyPageInput::LookupSelectedStrong(text) => {
+            StudyPageInput::LookupSelectedStrong(query) => {
                 self.dictionary_page
-                    .emit(DictionaryInputMessage::Lookup(text));
+                    .emit(DictionaryInputMessage::Lookup(query));
             }
         }
     }

@@ -3,7 +3,7 @@ use relm4::prelude::*;
 
 use crate::features::{
     bible::components::page::{
-        helpers::{AvailableFonts, Verse},
+        helpers::AvailableFonts,
         verse_components::{
             annotation_colors::{AnnotationColor, AnnotationOutput},
             verse_annotation::{AnnotationSettings, VerseAnnotation},
@@ -11,7 +11,12 @@ use crate::features::{
         },
         word::{WordModel, WordModelInput, WordModelOutput},
     },
-    core::display_configurations::Config::TextConfig,
+    core::{
+        display_configurations::Config::TextConfig,
+        module_engine::{
+            sword_engine_dictionary_ext::DictionaryQuery, sword_engine_module_content_ext::Verse,
+        },
+    },
 };
 
 pub struct VerseModel {
@@ -40,7 +45,7 @@ pub enum VerseInputMessage {
     ChangeBoldFont(bool),
     ChangeJustify(bool),
     PutChristWordsInRed(bool),
-    LookUp(String),
+    LookUp(DictionaryQuery),
     OpenMenu { x: f64, y: f64 },
 
     //======verse annotaions messages=====
@@ -49,7 +54,7 @@ pub enum VerseInputMessage {
 
 #[derive(Debug, Clone)]
 pub enum VerseOutputMessage {
-    Lookup(String),
+    Lookup(DictionaryQuery),
 }
 
 // --- VERSE FACTORY ---
@@ -311,8 +316,8 @@ impl Component for VerseModel {
                     .set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
                 widgets.verse_popover.popup();
             }
-            VerseInputMessage::LookUp(text) => {
-                let _ = sender.output(VerseOutputMessage::Lookup(text));
+            VerseInputMessage::LookUp(query) => {
+                let _ = sender.output(VerseOutputMessage::Lookup(query));
             }
 
             // ===== verse menu ======
@@ -424,8 +429,8 @@ impl VerseModel {
         // 2. Define your options (Label, Icon Name)
         let options = vec![
             ("Note", "document-new-symbolic"), // Standard for a text note/annotation
-            ("Tag", "mail-attachment-symbolic"),  // Distinct tag shape
-            ("Link", "insert-link-symbolic"),     // Standard chain link icon
+            ("Tag", "mail-attachment-symbolic"), // Distinct tag shape
+            ("Link", "insert-link-symbolic"),  // Standard chain link icon
             ("Bookmark", "bookmark-new-symbolic"), // Keep this, it's correct
         ];
 

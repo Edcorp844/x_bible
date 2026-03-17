@@ -240,7 +240,7 @@ impl SwordEngine {
             }
         }
 
-        println!("[SwordEngine] Local modules found: {:?}", modules);
+        //println!("[SwordEngine] Local modules found: {:?}", modules);
         modules
     }
 
@@ -251,7 +251,7 @@ impl SwordEngine {
             .filter(|m| categories.contains(&m.category.as_str()))
             .collect();
 
-        println!("MODULES: {:?}", modules);
+        //println!("MODULES: {:?}", modules);
 
         modules
     }
@@ -427,142 +427,103 @@ impl SwordEngine {
     }
 
     // --------------------LOOKUP---------------------
-    pub fn lookup_webster(&self, word: &str) -> String {
-        // 1. Identify the Webster module name (usually "Web1913" or "Webster")
-        let module_name = self.find_dictionary_module(&["Webster1828", "Webster"]);
+    /*   pub fn lookup_webster(&self, word: &str) -> String {
+            // 1. Identify the Webster module name (usually "Web1913" or "Webster")
+            let module_name = self.find_dictionary_module(&["Webster1828", "Webster"]);
 
-        let Some(name) = module_name else {
-            return "Webster dictionary module not found.".to_string();
-        };
+            let Some(name) = module_name else {
+                return "Webster dictionary module not found.".to_string();
+            };
 
-        // 2. Direct lookup (English words don't need prefixes like 'G' or 'H')
-        let result = self.get_dictionary_entry(&name, word);
+            // 2. Direct lookup (English words don't need prefixes like 'G' or 'H')
+            let result = self.get_dictionary_entry(&name, word);
 
-        if result.starts_with("NOT_FOUND") {
-            format!("No Webster definition found for '{}'.", word)
-        } else {
-            result
-        }
-    }
-
-    pub fn lookup_definition(&self, key: &str) -> String {
-        // 1. IMMEDIATE PRINT to verify the function is reached
-        println!("\n[DEBUG] Dictionary Engine reached with key: '{}'", key);
-
-        let is_greek = key.starts_with('G');
-        let is_hebrew = key.starts_with('H');
-
-        // Extract numbers only: "H01961" -> "1961"
-        let numeric_part: String = key.chars().filter(|c| c.is_ascii_digit()).collect();
-        let prefix = if is_greek {
-            "G"
-        } else if is_hebrew {
-            "H"
-        } else {
-            ""
-        };
-        let num_val = numeric_part.parse::<u32>().unwrap_or(0);
-
-        // 2. Select Module
-        let module_name = if is_greek {
-            self.find_dictionary_module(&["StrongsGreek", "StrongsRealGreek"])
-        } else if is_hebrew {
-            self.find_dictionary_module(&["StrongsHebrew", "StrongsRealHebrew"])
-        } else {
-            None
-        };
-
-        let Some(name) = module_name else {
-            println!("[DEBUG] Error: No dictionary modules found for language.");
-            return "No dictionary modules found.".to_string();
-        };
-
-        println!("[DEBUG] Using module: '{}'", name);
-
-        // 3. Define attempts
-        let attempts = vec![
-            numeric_part.clone(),                // "1961"
-            format!("{}{}", prefix, num_val),    // "H1961"
-            format!("{}{:04}", prefix, num_val), // "H1961"
-            format!("{}{:05}", prefix, num_val), // "H01961"
-        ];
-
-        // 4. Trial Loop
-        for attempt in attempts {
-            println!(
-                "[DEBUG] Trying key format: '{}' on module '{}'",
-                attempt, name
-            );
-            let result = self.get_dictionary_entry(&name, &attempt);
-
-            // If the result doesn't start with our internal "NOT_FOUND" marker, we found it!
-            if !result.starts_with("NOT_FOUND") {
-                println!("[DEBUG] SUCCESS! Found entry for '{}'", attempt);
-                return result;
+            if result.starts_with("NOT_FOUND") {
+                format!("No Webster definition found for '{}'.", word)
+            } else {
+                result
             }
         }
 
-        format!("Entry for '{}' not found in {}.", key, name)
-    }
+        pub fn lookup_definition(&self, key: &str) -> String {
+            // 1. IMMEDIATE PRINT to verify the function is reached
+            println!("\n[DEBUG] Dictionary Engine reached with key: '{}'", key);
 
-    fn find_dictionary_module(&self, preferences: &[&str]) -> Option<String> {
-        let inner = self.inner.lock().unwrap();
+            let is_greek = key.starts_with('G');
+            let is_hebrew = key.starts_with('H');
 
-        // Try preferred list first
-        for pref in preferences {
-            let c_pref = CString::new(*pref).unwrap();
-            unsafe {
-                let module = org_crosswire_sword_SWMgr_getModuleByName(inner.mgr, c_pref.as_ptr());
-                if module != 0 {
-                    return Some(pref.to_string());
+            // Extract numbers only: "H01961" -> "1961"
+            let numeric_part: String = key.chars().filter(|c| c.is_ascii_digit()).collect();
+            let prefix = if is_greek {
+                "G"
+            } else if is_hebrew {
+                "H"
+            } else {
+                ""
+            };
+            let num_val = numeric_part.parse::<u32>().unwrap_or(0);
+
+            // 2. Select Module
+            let module_name = if is_greek {
+                self.find_dictionary_module(&["StrongsGreek", "StrongsRealGreek"])
+            } else if is_hebrew {
+                self.find_dictionary_module(&["StrongsHebrew", "StrongsRealHebrew"])
+            } else {
+                None
+            };
+
+            let Some(name) = module_name else {
+                println!("[DEBUG] Error: No dictionary modules found for language.");
+                return "No dictionary modules found.".to_string();
+            };
+
+            println!("[DEBUG] Using module: '{}'", name);
+
+            // 3. Define attempts
+            let attempts = vec![
+                numeric_part.clone(),                // "1961"
+                format!("{}{}", prefix, num_val),    // "H1961"
+                format!("{}{:04}", prefix, num_val), // "H1961"
+                format!("{}{:05}", prefix, num_val), // "H01961"
+            ];
+
+            // 4. Trial Loop
+            for attempt in attempts {
+                println!(
+                    "[DEBUG] Trying key format: '{}' on module '{}'",
+                    attempt, name
+                );
+                let result = self.get_dictionary_entry(&name, &attempt);
+
+                // If the result doesn't start with our internal "NOT_FOUND" marker, we found it!
+                if !result.starts_with("NOT_FOUND") {
+                    println!("[DEBUG] SUCCESS! Found entry for '{}'", attempt);
+                    return result;
                 }
             }
+
+            format!("Entry for '{}' not found in {}.", key, name)
         }
 
-        // Fallback: Just return the first module that is actually a dictionary
-        // For now, we'll return None if preferences fail to keep it simple
-        None
-    }
+        fn find_dictionary_module(&self, preferences: &[&str]) -> Option<String> {
+            let inner = self.inner.lock().unwrap();
 
-    fn get_dictionary_entry(&self, module_name: &str, key: &str) -> String {
-        let inner = self.inner.lock().unwrap();
-        let c_mod = CString::new(module_name).unwrap();
-        let c_key = CString::new(key).unwrap();
-
-        unsafe {
-            let module_ptr = org_crosswire_sword_SWMgr_getModuleByName(inner.mgr, c_mod.as_ptr());
-            if module_ptr == 0 {
-                return format!("NOT_FOUND: Module '{}' not found", module_name);
+            // Try preferred list first
+            for pref in preferences {
+                let c_pref = CString::new(*pref).unwrap();
+                unsafe {
+                    let module = org_crosswire_sword_SWMgr_getModuleByName(inner.mgr, c_pref.as_ptr());
+                    if module != 0 {
+                        return Some(pref.to_string());
+                    }
+                }
             }
 
-            // 1. Force the key into the module
-            org_crosswire_sword_SWModule_setKeyText(module_ptr, c_key.as_ptr());
-
-            // 2. Check for Error: SWORD uses an Error object or a return code
-            // to signal if a key is 'Out of Bounds'.
-            // If your FFI has 'SWModule_error', check it here.
-
-            // 3. IMPORTANT: Some modules require 'getRawEntry' to trigger the load
-            let raw_ptr = org_crosswire_sword_SWModule_getRawEntry(module_ptr);
-            if raw_ptr.is_null() || *raw_ptr == 0 {
-                return format!("NOT_FOUND: No raw data for key '{}'", key);
-            }
-
-            // 4. Render the text
-            let text_ptr = org_crosswire_sword_SWModule_getRawEntry(module_ptr); //renderText(module_ptr);
-            if text_ptr.is_null() {
-                return "NOT_FOUND: Render returned null".to_string();
-            }
-
-            let text = CStr::from_ptr(text_ptr).to_string_lossy().into_owned();
-
-            if text.is_empty() {
-                "NOT_FOUND: Empty result".to_string()
-            } else {
-                text
-            }
+            // Fallback: Just return the first module that is actually a dictionary
+            // For now, we'll return None if preferences fail to keep it simple
+            None
         }
-    }
+    */
 
     // ------------------- HELPERS -------------------
 

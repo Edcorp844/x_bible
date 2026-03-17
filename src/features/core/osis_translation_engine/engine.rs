@@ -1,5 +1,8 @@
-use crate::features::bible::components::page::helpers::{
-    LexicalInfo, Section, SegmentStyle, TextDirection, TitleStyle, Verse, Word,
+use crate::features::{
+    bible::components::page::helpers::TitleStyle,
+    core::module_engine::sword_engine_module_content_ext::{
+        LexicalInfo, Section, TextDirection, Verse, Word,
+    },
 };
 use ego_tree::NodeRef;
 use scraper::Html;
@@ -11,8 +14,13 @@ impl OsisTransilationEngine {
         Self {}
     }
 
-    pub fn parse_osis_to_sections(&self, osis: &str, verse_key: Option<String>) -> Vec<Section> {
-        let (mut words, notes, title_words, title_style) = self.parse_osis_content(osis);
+    pub fn parse_osis_to_sections(
+        &self,
+        language: String,
+        osis: &str,
+        verse_key: Option<String>,
+    ) -> Vec<Section> {
+        let (mut words, notes, title_words, title_style) = self.parse_osis_content(language, osis);
 
         // Detect direction based on the first few words
         let sample_text = words.first().map(|w| w.text.as_str()).unwrap_or("");
@@ -28,7 +36,6 @@ impl OsisTransilationEngine {
 
         vec![Section {
             title: title_vec,
-            title_style,
             verses: vec![Verse {
                 number: self.extract_verse_number(&key),
                 osis_id: key,
@@ -42,6 +49,7 @@ impl OsisTransilationEngine {
 
     fn parse_osis_content(
         &self,
+        language: String,
         osis: &str,
     ) -> (Vec<Word>, Vec<String>, Option<Vec<Word>>, TitleStyle) {
         let fragment = Html::parse_fragment(osis);
@@ -63,6 +71,7 @@ impl OsisTransilationEngine {
             false,
             false,
             false,
+            language,
         );
 
         let final_title = if title_words.is_empty() {
@@ -87,6 +96,7 @@ impl OsisTransilationEngine {
         is_inside_title: bool,
         is_inside_note: bool,
         is_divine: bool,
+        language: String,
     ) {
         use scraper::node::Node;
 
@@ -153,6 +163,7 @@ impl OsisTransilationEngine {
                         traversing_title,
                         traversing_note,
                         active_divine,
+                        language.clone(),
                     );
                 }
             }
@@ -181,6 +192,7 @@ impl OsisTransilationEngine {
                             is_inside_title,
                             is_inside_note,
                             is_divine,
+                            language.clone(),
                         );
                     }
                 } else {
@@ -204,6 +216,7 @@ impl OsisTransilationEngine {
                                 is_inside_title,
                                 is_divine,
                                 parent_lex.clone(),
+                                language.clone(),
                             ));
                         }
                     } else {
@@ -217,6 +230,7 @@ impl OsisTransilationEngine {
                                 is_inside_title,
                                 is_divine,
                                 parent_lex.clone(),
+                                language.clone(),
                             ));
                         }
                     }
@@ -237,6 +251,7 @@ impl OsisTransilationEngine {
                         is_inside_title,
                         is_inside_note,
                         is_divine,
+                        language.clone(),
                     );
                 }
             }
@@ -253,17 +268,13 @@ impl OsisTransilationEngine {
         is_inside_title: bool,
         is_divine: bool,
         lex: Option<LexicalInfo>,
+        language: String,
     ) -> Word {
         let is_punct = text
             .chars()
             .all(|c| c.is_ascii_punctuation() || ('\u{3000}'..='\u{303F}').contains(&c));
         Word {
             text,
-            style: if is_added {
-                SegmentStyle::Added
-            } else {
-                SegmentStyle::Plain
-            },
             is_red,
             is_italic,
             is_bold_text: is_inside_title || is_divine,
@@ -273,6 +284,7 @@ impl OsisTransilationEngine {
             is_last_in_group: false,
             is_title: is_inside_title,
             is_punctuation: is_punct,
+            language,
         }
     }
 
@@ -300,14 +312,10 @@ impl OsisTransilationEngine {
         }
         for i in 0..len {
             let current_is_red = words[i].is_red;
-            let current_is_added = words[i].style == SegmentStyle::Added;
-            if current_is_red || current_is_added {
-                let prev = i > 0
-                    && ((current_is_red && words[i - 1].is_red)
-                        || (current_is_added && words[i - 1].style == SegmentStyle::Added));
-                let next = i < len - 1
-                    && ((current_is_red && words[i + 1].is_red)
-                        || (current_is_added && words[i + 1].style == SegmentStyle::Added));
+
+            if current_is_red {
+                let prev = i > 0 && (current_is_red && words[i - 1].is_red);
+                let next = i < len - 1 && (current_is_red && words[i + 1].is_red);
                 words[i].is_first_in_group = !prev;
                 words[i].is_last_in_group = !next;
             }

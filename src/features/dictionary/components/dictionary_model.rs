@@ -2,7 +2,9 @@ use gtk::prelude::*;
 use relm4::{Component, ComponentParts, ComponentSender, prelude::*};
 use std::sync::Arc;
 
-use crate::features::core::module_engine::sword_engine::SwordEngine;
+use crate::features::core::module_engine::{
+    sword_engine::SwordEngine, sword_engine_dictionary_ext::DictionaryQuery,
+};
 
 pub struct DictionaryPage {
     engine: Arc<SwordEngine>,
@@ -13,7 +15,7 @@ pub struct DictionaryPage {
 
 #[derive(Debug)]
 pub enum DictionaryInputMessage {
-    Lookup(String),
+    Lookup(DictionaryQuery),
 }
 
 #[relm4::component(pub)]
@@ -123,17 +125,10 @@ impl Component for DictionaryPage {
         _root: &Self::Root,
     ) {
         match message {
-            DictionaryInputMessage::Lookup(text) => {
-                let key = text.trim();
-                if !key.is_empty() {
-                    let def = self.engine.lookup_definition(key);
-                    let lex = self.engine.lookup_webster(&self.key);
-
-                    // Direct UI update to bypass potential #[watch] delay
-                    widgets.definition_label.set_label(&def);
-                    widgets.lexicon_label.set_label(&lex);
-                    self.definition = def;
-                }
+            DictionaryInputMessage::Lookup(query) => {
+                self.key = query.clone().word;
+                let lookup_result = self.engine.lookup_dictionary(query);
+                println!("Recieved: {:?}", lookup_result);
             }
         }
     }

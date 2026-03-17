@@ -3,14 +3,19 @@ use relm4::prelude::*;
 
 use crate::features::{
     bible::components::page::{
-        helpers::{Section, TitleStyle},
+        helpers::TitleStyle,
         verse_components::{
             verse::{VerseInputMessage, VerseModel, VerseOutputMessage},
             verse_annotation::{Annotations, VerseAnnotation},
         },
         word::{WordModel, WordModelInput},
     },
-    core::display_configurations::Config::TextConfig,
+    core::{
+        display_configurations::Config::TextConfig,
+        module_engine::{
+            sword_engine_dictionary_ext::DictionaryQuery, sword_engine_module_content_ext::Section,
+        },
+    },
 };
 
 pub struct SectionModel {
@@ -24,12 +29,12 @@ pub struct SectionModel {
 #[derive(Debug, Clone)]
 pub enum SectionInput {
     ToggleDisplay(VerseInputMessage),
-    Lookup(String),
+    Lookup(DictionaryQuery),
 }
 
 #[derive(Debug)]
 pub enum SectionOutput {
-    Lookup(String),
+    Lookup(DictionaryQuery),
 }
 
 #[relm4::factory(pub)]
@@ -63,11 +68,8 @@ impl FactoryComponent for SectionModel {
 
                 // Styling based on H1, H2, etc.
                 #[watch]
-                add_css_class: match self.data.title_style {
-                    TitleStyle::H1 => "section-title-h1",
-                    TitleStyle::H2 => "section-title-h2",
-                    _ => "section-title-h3",
-                },
+                add_css_class:"title-3",
+
             },
 
             // 2. Verses
@@ -138,7 +140,7 @@ impl FactoryComponent for SectionModel {
                     annotation,
                 ))
                 .forward(sender.input_sender(), move |message| match message {
-                    VerseOutputMessage::Lookup(text) => SectionInput::Lookup(text),
+                    VerseOutputMessage::Lookup(query) => SectionInput::Lookup(query),
                 });
             verse_box.append(controller.widget());
             verses_controllers.push(controller)

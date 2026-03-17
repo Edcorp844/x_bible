@@ -19,11 +19,13 @@ use crate::features::{
         display_configurations::{
             Config::TextConfig, preview_display_configuration::PreviewDisplayConfig,
         },
+        module_engine::sword_engine::SwordEngine,
         osis_translation_engine::engine::OsisTransilationEngine,
     },
 };
 
 pub struct CustomizeThemePopup {
+    engine: Arc<SwordEngine>,
     config: TextConfig,
     preview: FactoryVecDeque<SectionModel>,
 }
@@ -44,7 +46,7 @@ pub enum CustomizeThemeOutput {
 
 #[relm4::component(pub)]
 impl Component for CustomizeThemePopup {
-    type Init = TextConfig;
+    type Init = (TextConfig, Arc<SwordEngine>);
     type Input = CustomizeThemeInput;
     type Output = CustomizeThemeOutput;
     type CommandOutput = ();
@@ -464,12 +466,17 @@ impl Component for CustomizeThemePopup {
         root: Self::Root,
         sender: relm4::ComponentSender<Self>,
     ) -> relm4::ComponentParts<Self> {
+        let (config, engine) = init;
         let preview = FactoryVecDeque::builder()
             .launch(gtk::Box::new(gtk::Orientation::Vertical, 0))
             .detach();
 
-        let config = Arc::new(RwLock::new(PreviewDisplayConfig::from_page_config(init)));
-        let mut model = CustomizeThemePopup { config, preview };
+        let config = Arc::new(RwLock::new(PreviewDisplayConfig::from_page_config(config)));
+        let mut model = CustomizeThemePopup {
+            engine,
+            config,
+            preview,
+        };
 
         model.setup_preview();
         let preview_widget = model.preview.widget();
@@ -521,14 +528,11 @@ impl Component for CustomizeThemePopup {
 
 impl CustomizeThemePopup {
     fn setup_preview(&mut self) {
-        let preview_osis = r#"<w lemma="strong:G1161 lemma.TR:δε" morph="robinson:CONJ" src="2">And</w> <w lemma="strong:G1492 lemma.TR:οιδαμεν" morph="robinson:V-RAI-1P" src="1">we know</w> <w lemma="strong:G3754 lemma.TR:οτι" morph="robinson:CONJ" src="3">that</w> <w lemma="strong:G3588 strong:G5207 lemma.TR:ο lemma.TR:υιος" morph="robinson:T-NSM robinson:N-NSM" src="4 5">the Son</w> <w lemma="strong:G3588 strong:G2316 lemma.TR:του lemma.TR:θεου" morph="robinson:T-GSM robinson:N-GSM" src="6 7">of God</w> <w lemma="strong:G2240 lemma.TR:ηκει" morph="robinson:V-PAI-3S" src="8">is come</w>, <w lemma="strong:G2532 lemma.TR:και" morph="robinson:CONJ" src="9">and</w> <w lemma="strong:G1325 lemma.TR:δεδωκεν" morph="robinson:V-RAI-3S" src="10">hath given</w> <w lemma="strong:G1473 lemma.TR:ημιν" morph="robinson:P-1DP" src="11">us</w> <w lemma="strong:G1271 lemma.TR:διανοιαν" morph="robinson:N-ASF" src="12">an understanding</w>, <w lemma="strong:G2443 lemma.TR:ινα" morph="robinson:CONJ" src="13">that</w> <w lemma="strong:G1097 lemma.TR:γινωσκωμεν" morph="robinson:V-PAS-1P" src="14">we may know</w> <w lemma="strong:G228 lemma.TR:αληθινον" morph="robinson:A-ASM" src="16">him that is true</w>, <w lemma="strong:G2532 lemma.TR:και" morph="robinson:CONJ" src="17">and</w> <w lemma="strong:G1510 lemma.TR:εσμεν" morph="robinson:V-PAI-1P" src="18">we are</w> <w lemma="strong:G1722 lemma.TR:εν" morph="robinson:PREP" src="19">in</w> <w lemma="strong:G228 lemma.TR:αληθινω" morph="robinson:A-DSM" src="21">him that is true</w>, <transChange type="added">even</transChange> <w lemma="strong:G1722 lemma.TR:εν" morph="robinson:PREP" src="22">in</w> <w lemma="strong:G846 lemma.TR:αυτου" morph="robinson:P-GSM" src="25">his</w> <w lemma="strong:G3588 strong:G5207 lemma.TR:τω lemma.TR:υιω" morph="robinson:T-DSM robinson:N-DSM" src="23 24">Son</w> <w lemma="strong:G2424 lemma.TR:ιησου" morph="robinson:N-DSM" src="26">Jesus</w> <w lemma="strong:G5547 lemma.TR:χριστω" morph="robinson:N-DSM" src="27">Christ</w>. <w lemma="strong:G3778 lemma.TR:ουτος" morph="robinson:D-NSM" src="28">This</w> <w lemma="strong:G1510 lemma.TR:εστιν" morph="robinson:V-PAI-3S" src="29">is</w> <w lemma="strong:G228 lemma.TR:αληθινος" morph="robinson:A-NSM" src="31">the true</w> <w lemma="strong:G2316 lemma.TR:θεος" morph="robinson:N-NSM" src="32">God</w>, <w lemma="strong:G2532 lemma.TR:και" morph="robinson:CONJ" src="33">and</w> <w lemma="strong:G166 lemma.TR:αιωνιος" morph="robinson:A-NSF" src="36">eternal</w> <w lemma="strong:G3588 strong:G2222 lemma.TR:η lemma.TR:ζωη" morph="robinson:T-NSF robinson:N-NSF" src="34 35">life</w>.<w lemma="strong:G3588 lemma.TR:τον" morph="robinson:T-ASM" src="15"/><w lemma="strong:G3588 lemma.TR:τω" morph="robinson:T-DSM" src="20"/><w lemma="strong:G3588 lemma.TR:ο" morph="robinson:T-NSM" src="30"/>"#;
-        let osis_engine = OsisTransilationEngine::new();
-        let verses = osis_engine.parse_osis_to_sections(preview_osis, None);
-
+        let preview_sections = self.engine.get_single_entry(None, "John 3:16");
         let mut guard = self.preview.guard();
         guard.clear();
-        for verse in verses {
-            guard.push_back((verse, self.config.clone(), HashMap::new()));
+        for section in preview_sections {
+            guard.push_back((section, self.config.clone(), HashMap::new()));
         }
     }
 

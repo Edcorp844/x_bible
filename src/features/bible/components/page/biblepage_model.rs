@@ -16,9 +16,11 @@ use crate::features::bible::components::page_theme::customize_theme_popup::{
 };
 use crate::features::core::display_configurations::Config::TextConfig;
 use crate::features::core::module_engine::sword_engine::SwordEngine;
+use crate::features::core::module_engine::sword_engine_dictionary_ext::DictionaryQuery;
+use crate::features::core::module_engine::sword_module::SwordModule;
 pub struct BiblePage {
-    pub mgr_ptr: isize,
-    pub(crate) module: String,
+    pub(crate) engine: Arc<SwordEngine>,
+    pub(crate) module: SwordModule,
     pub(crate) sections: FactoryVecDeque<SectionModel>,
     pub(crate) config: TextConfig,
     pub(crate) customize_theme_popup: Option<Controller<CustomizeThemePopup>>,
@@ -38,7 +40,7 @@ pub enum StudyInput {
 #[derive(Debug)]
 pub enum StudyPageOutput {
     ChangeTheme,
-    LookupSelectedStrong(String),
+    LookupSelectedStrong(DictionaryQuery),
 }
 
 #[relm4::component(pub)]
@@ -401,12 +403,15 @@ impl Component for BiblePage {
         let sections = FactoryVecDeque::builder()
             .launch(section_container)
             .forward(sender.output_sender(), move |message| match message {
-                SectionOutput::Lookup(text) => StudyPageOutput::LookupSelectedStrong(text),
+                SectionOutput::Lookup(query) => StudyPageOutput::LookupSelectedStrong(query),
             });
-        let mgr_ptr = engine.inner.lock().unwrap().mgr;
+
+        let modules = engine.get_bible_modules();
+
+        let module = modules.first().unwrap();
 
         let model = BiblePage {
-            mgr_ptr,
+            engine,
             module: module.clone(),
             sections,
             config: Arc::new(RwLock::new(PageDisplayConfig::new())),
@@ -480,7 +485,7 @@ impl Component for BiblePage {
             StudyInput::LoadReference(refe) => self.load_reference(&refe),
             StudyInput::OpenCustomizethemePopup => {
                 let controller = CustomizeThemePopup::builder()
-                    .launch(self.config.clone())
+                    .launch((self.config.clone(), self.engine.clone()))
                     .forward(sender.input_sender(), move |msg| match msg {
                         CustomizeThemeOutput::Close => StudyInput::CloseCustomizethemePopup,
                         CustomizeThemeOutput::SaveConfig(config) => StudyInput::SetConfig(config),
@@ -495,7 +500,7 @@ impl Component for BiblePage {
                 }
             }
             // StudyInput::SelectStrong(_) => {}
-            StudyInput::SetModule(name) => self.module = name,
+            //StudyInput::SetModule(name) => self.module = name,
             StudyInput::ToggleDisplay(factory_msg) => {
                 self.config.write().unwrap().apply_message(&factory_msg);
                 for i in 0..self.sections.len() {
@@ -529,6 +534,7 @@ impl Component for BiblePage {
                 ));
                 self.populate_fonts_container(&widgets.menu_fonts_container, sender);
             }
+            _ => {}
         }
     }
 }

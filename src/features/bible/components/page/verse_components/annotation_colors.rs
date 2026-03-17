@@ -51,7 +51,7 @@ impl Component for AnnotationColor {
         // Apply the color immediately on init
         let hex = model.color.clone();
         widgets.swatch.inline_css(&format!(
-            "background-color: {}; border-radius: 15px; border: 1px solid rgba(0,0,0,0.1);",
+            "background-color: alpha({}, 0.8); border-radius: 15px; border: 1px solid rgba(0,0,0,0.1);",
             hex
         ));
 
@@ -69,7 +69,7 @@ impl Component for AnnotationColor {
 
         // Update the UI dynamically using the widgets reference
         widgets.swatch.inline_css(&format!(
-            "background-color: {}; border-radius: 15px; border: 1px solid rgba(0,0,0,0.1);",
+            "background-color: alpha({}, 0.8); border-radius: 15px; border: 1px solid rgba(0,0,0,0.1);",
             self.color
         ));
     }

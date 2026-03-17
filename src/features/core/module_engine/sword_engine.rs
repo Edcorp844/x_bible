@@ -240,7 +240,7 @@ impl SwordEngine {
             }
         }
 
-        println!("[SwordEngine] Local modules found: {}", modules.len());
+        println!("[SwordEngine] Local modules found: {:?}", modules);
         modules
     }
 
@@ -429,7 +429,7 @@ impl SwordEngine {
     // --------------------LOOKUP---------------------
     pub fn lookup_webster(&self, word: &str) -> String {
         // 1. Identify the Webster module name (usually "Web1913" or "Webster")
-        let module_name = self.find_dictionary_module(&["Web1913", "Webster"]);
+        let module_name = self.find_dictionary_module(&["Webster1828", "Webster"]);
 
         let Some(name) = module_name else {
             return "Webster dictionary module not found.".to_string();

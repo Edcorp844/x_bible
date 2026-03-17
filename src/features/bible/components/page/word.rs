@@ -35,107 +35,107 @@ impl SimpleComponent for WordModel {
     type Output = WordModelOutput;
 
     view! {
-        #[root]
-        gtk::Box {
-            set_orientation: gtk::Orientation::Vertical,
-            set_spacing: 2,
-            #[track(true)]
-            set_halign: model.get_align(),
-
-            #[name="word_wrapper"]
-            gtk::Box{
-                set_orientation: gtk::Orientation::Horizontal,
+            #[root]
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
                 set_spacing: 2,
                 #[track(true)]
                 set_halign: model.get_align(),
 
-
-                gtk::Label {
-                    add_css_class: "bible-text",
-                    set_hexpand: false,
+                #[name="word_wrapper"]
+                gtk::Box{
+                    set_orientation: gtk::Orientation::Horizontal,
+                    set_spacing: 2,
                     #[track(true)]
-                    set_margin_start: if model.data.is_punctuation { 0 } else { model.config.read().unwrap().pango_word_spacing() },
-                    #[track(true)]
-                    set_markup: model.render_word().as_str(),
-                    #[track(true)]
-                    set_direction: model.text_direction,
-                    set_xalign: 0.0,
-                    #[watch]
-                    inline_css: &format!(
-                        "background-color: {}; border-radius: 6px;",
-                        model.annotation.color.as_deref().unwrap_or("transparent")
-                    ),
-                },
-            },
+                    set_halign: model.get_align(),
 
-            gtk::Box{
-                set_orientation: gtk::Orientation::Vertical,
-                set_spacing: 2,
-                set_halign: gtk::Align::Start,
-
-                #[watch]
-                set_visible: model.config.read().unwrap().show_lemma() ||model.config.read().unwrap().show_strongs() || model.config.read().unwrap().show_morphs(),
-
-                gtk::Revealer{
-                    set_transition_type: gtk::RevealerTransitionType::SlideDown,
-                    set_transition_duration: 350,
-
-                    #[watch]
-                    set_reveal_child: model.should_reveal_strong(),
 
                     gtk::Label {
                         add_css_class: "bible-text",
-                        add_css_class: "lexical",
-                        set_use_markup: true,
+                        set_hexpand: false,
+                        #[track(true)]
+                        set_margin_start: if model.data.is_punctuation { 0 } else { model.config.read().unwrap().pango_word_spacing() },
+                        #[track(true)]
+                        set_markup: model.render_word().as_str(),
+                        #[track(true)]
+                        set_direction: model.text_direction,
                         set_xalign: 0.0,
-                        set_margin_start: 4,
-                        set_margin_end: 8,
+                       #[watch]
+                    inline_css: &format!(
+                        "background-color: alpha({}, 0.8); border-radius: 10px;",
+                        model.annotation.color.as_deref().unwrap_or("transparent"),
+                    ),
+                    },
+                },
+
+                gtk::Box{
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 2,
+                    set_halign: gtk::Align::Start,
+
+                    #[watch]
+                    set_visible: model.config.read().unwrap().show_lemma() ||model.config.read().unwrap().show_strongs() || model.config.read().unwrap().show_morphs(),
+
+                    gtk::Revealer{
+                        set_transition_type: gtk::RevealerTransitionType::SlideDown,
+                        set_transition_duration: 350,
 
                         #[watch]
-                        set_markup: &model.get_strongs_markup(),
+                        set_reveal_child: model.should_reveal_strong(),
 
-                        add_controller = gtk::GestureClick {
-                            set_button: 1,
-                            connect_released[sender] => move |_, _, _, _| {
-                                sender.input(WordModelInput::LookUp)
+                        gtk::Label {
+                            add_css_class: "bible-text",
+                            add_css_class: "lexical",
+                            set_use_markup: true,
+                            set_xalign: 0.0,
+                            set_margin_start: 4,
+                            set_margin_end: 8,
+
+                            #[watch]
+                            set_markup: &model.get_strongs_markup(),
+
+                            add_controller = gtk::GestureClick {
+                                set_button: 1,
+                                connect_released[sender] => move |_, _, _, _| {
+                                    sender.input(WordModelInput::LookUp)
+                                }
                             }
                         }
-                    }
-                },
+                    },
 
-                 gtk::Revealer{
-                    set_transition_type: gtk::RevealerTransitionType::SlideDown,
-                    set_transition_duration: 350,
-
-                    #[watch]
-                    set_reveal_child: model.should_reveal_lemma(),
-
-                    gtk::Label {
-                        add_css_class: "bible-text",
-                        add_css_class: "lexical",
-                        set_use_markup: true,
-                        set_xalign: 0.0,
-                        set_margin_start: 4,
-                        set_margin_end: 8,
+                     gtk::Revealer{
+                        set_transition_type: gtk::RevealerTransitionType::SlideDown,
+                        set_transition_duration: 350,
 
                         #[watch]
-                        set_markup: &model.get_lemma_markup(),
-                    }
-                },
+                        set_reveal_child: model.should_reveal_lemma(),
 
-                 gtk::Revealer{
-                    set_transition_type: gtk::RevealerTransitionType::SlideDown,
-                    set_transition_duration: 350,
+                        gtk::Label {
+                            add_css_class: "bible-text",
+                            add_css_class: "lexical",
+                            set_use_markup: true,
+                            set_xalign: 0.0,
+                            set_margin_start: 4,
+                            set_margin_end: 8,
 
-                    #[watch]
-                    set_reveal_child: model.should_reveal_morphs(),
+                            #[watch]
+                            set_markup: &model.get_lemma_markup(),
+                        }
+                    },
 
-                    #[local_ref]
-                        morph_box -> gtk::Box {},
-                    }
+                     gtk::Revealer{
+                        set_transition_type: gtk::RevealerTransitionType::SlideDown,
+                        set_transition_duration: 350,
+
+                        #[watch]
+                        set_reveal_child: model.should_reveal_morphs(),
+
+                        #[local_ref]
+                            morph_box -> gtk::Box {},
+                        }
+                }
             }
         }
-    }
 
     fn init(
         init: Self::Init,

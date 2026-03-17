@@ -6,7 +6,9 @@ use crate::features::core::module_engine::sword_engine::SwordEngine;
 
 pub struct DictionaryPage {
     engine: Arc<SwordEngine>,
+    key: String,
     definition: String,
+    lexicon: String,
 }
 
 #[derive(Debug)]
@@ -29,6 +31,34 @@ impl Component for DictionaryPage {
             set_vexpand: true,
             set_hexpand: true,
 
+             gtk::Box{
+                set_orientation: gtk::Orientation::Vertical,
+                set_hexpand: false,
+                set_margin_all: 20,
+                set_halign: gtk::Align::Start,
+
+                gtk::Label {
+                        #[watch]
+                        set_label: &model.key,
+                        set_wrap: true,
+                        set_xalign: 0.0,
+                        set_yalign: 0.0,
+                        set_selectable: true,
+                        set_justify: gtk::Justification::Left,
+                        set_use_markup: false,
+                         add_css_class: "title-4",
+                    },
+
+                gtk::Box{
+                    add_css_class: "key-underline",
+                    set_margin_top: 5,
+                    set_hexpand: false,
+                    set_width_request: 50,
+                    set_height_request: 4,
+                    set_halign: gtk::Align::Start,
+                },
+            },
+
             gtk::ScrolledWindow {
                 set_hscrollbar_policy: gtk::PolicyType::Never,
                 set_vscrollbar_policy: gtk::PolicyType::Automatic,
@@ -36,6 +66,8 @@ impl Component for DictionaryPage {
 
                 // This ensures the scrolled window doesn't collapse
                 set_min_content_height: 200,
+
+
 
                 #[name = "definition_label"]
                 gtk::Label {
@@ -46,8 +78,20 @@ impl Component for DictionaryPage {
                     set_yalign: 0.0,
                     set_selectable: true,
                     set_justify: gtk::Justification::Left,
-                    // Use Pango markup if your SWORD engine returns HTML/styles
-                    set_use_markup: false,
+                    set_use_markup: true,
+                    set_margin_all: 20,
+                },
+
+                #[name = "lexicon_label"]
+                gtk::Label {
+                    #[watch]
+                    set_label: &model.lexicon,
+                    set_wrap: true,
+                    set_xalign: 0.0,
+                    set_yalign: 0.0,
+                    set_selectable: true,
+                    set_justify: gtk::Justification::Left,
+                    set_use_markup: true,
                     set_margin_all: 20,
                 }
             }
@@ -61,7 +105,9 @@ impl Component for DictionaryPage {
     ) -> ComponentParts<Self> {
         let model = DictionaryPage {
             engine: init,
-            definition: "Enter a word to look up...".to_string(),
+            key: "Heavens".to_string(),
+            definition: "".to_string(),
+            lexicon: "".to_string(),
         };
 
         let widgets = view_output!();
@@ -81,9 +127,11 @@ impl Component for DictionaryPage {
                 let key = text.trim();
                 if !key.is_empty() {
                     let def = self.engine.lookup_definition(key);
+                    let lex = self.engine.lookup_webster(&self.key);
 
                     // Direct UI update to bypass potential #[watch] delay
                     widgets.definition_label.set_label(&def);
+                    widgets.lexicon_label.set_label(&lex);
                     self.definition = def;
                 }
             }

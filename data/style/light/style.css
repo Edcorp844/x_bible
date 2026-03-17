@@ -67,7 +67,7 @@ label {
     padding-bottom: 2pt;
     border-radius: 8pt;
     border: 1px solid var(--border-color);
-   /* box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);*/
+    /* box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);*/
 }
 
 .bible-note-popover contents {
@@ -116,7 +116,7 @@ label {
     background-color: var(--dark-5);
 }
 
-dropdown > popover {
+dropdown>popover {
     position: absolute;
 }
 
@@ -212,6 +212,7 @@ window.dark .preview-area-Modern {
     background-color: var(--window-bg-color);
     color: var(--window-fg-color);
 }
+
 .menu-theme-btn {
     border: 2px solid var(--border-color);
     padding: 20px;
@@ -227,4 +228,9 @@ window.dark .preview-area-Modern {
 
 .measure {
     background-color: aqua;
+}
+
+.key-underline {
+    background-color: var(--warning-bg-color);
+    border-radius: 5px;
 }

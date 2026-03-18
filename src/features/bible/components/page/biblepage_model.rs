@@ -687,6 +687,7 @@ impl Component for BiblePage {
                         .send(i, SectionInput::ToggleDisplay(msg.clone()));
                 }
                 let class = self.make_css_preview_clss(self.config.read().unwrap().theme());
+                let _ = sender.output(StudyPageOutput::ChangeTheme);
                 widgets
                     .page_overlay
                     .set_css_classes(&["page-overlay", &class]);

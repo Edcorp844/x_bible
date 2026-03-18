@@ -93,9 +93,6 @@ label {
 }
 
 /* When the menu is CLOSED (collapsing), we want the radius to snap back faster */
-.page-menu-card:not(:has(revealer[reveal-child=true])) {
-    transition: border-radius 200ms ease-in;
-}
 
 .page-menu-card.osd:has(revealer[reveal-child=true]) {
     border-radius: 20px;
@@ -116,15 +113,11 @@ label {
     background-color: var(--dark-5);
 }
 
-dropdown>popover {
-    position: absolute;
-}
 
 .studypage-menu-section-container {
     border: 1px solid alpha(var(--card-fg-color), 0.1);
     border-radius: 32px;
     transition: border-radius 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
-    overflow: visible;
 }
 
 .menu-font-option {
@@ -133,9 +126,6 @@ dropdown>popover {
     /* Vertical padding: 8px, Horizontal padding: 16px */
     /* This ensures it looks like a balanced 'chip' */
     padding: 4px 4px;
-
-    /* Ensure the font name doesn't wrap inside the chip */
-    white-space: nowrap;
 
     /* Adds a smooth transition for hover effects */
     transition: all 0.2s ease;

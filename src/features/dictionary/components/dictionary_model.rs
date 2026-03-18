@@ -9,8 +9,6 @@ use crate::features::core::module_engine::{
 pub struct DictionaryPage {
     engine: Arc<SwordEngine>,
     key: String,
-    definition: String,
-    lexicon: String,
 }
 
 #[derive(Debug)]
@@ -29,72 +27,48 @@ impl Component for DictionaryPage {
         #[name = "dictionary_container"]
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
-            set_spacing: 10,
+            set_spacing: 0,
             set_vexpand: true,
             set_hexpand: true,
 
-             gtk::Box{
+            // Header Section
+            gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
-                set_hexpand: false,
-                set_margin_all: 20,
+                set_margin_all: 24,
                 set_halign: gtk::Align::Start,
 
+                #[name = "header_label"]
                 gtk::Label {
-                        #[watch]
-                        set_label: &model.key,
-                        set_wrap: true,
-                        set_xalign: 0.0,
-                        set_yalign: 0.0,
-                        set_selectable: true,
-                        set_justify: gtk::Justification::Left,
-                        set_use_markup: false,
-                         add_css_class: "title-4",
-                    },
+                    #[watch]
+                    set_label: &model.key,
+                    set_wrap: true,
+                    set_xalign: 0.0,
+                    add_css_class: "title-1", // Large bold header
+                },
 
-                gtk::Box{
+                gtk::Box {
                     add_css_class: "key-underline",
-                    set_margin_top: 5,
-                    set_hexpand: false,
-                    set_width_request: 50,
+                    set_margin_top: 8,
+                    set_width_request: 60,
                     set_height_request: 4,
                     set_halign: gtk::Align::Start,
                 },
             },
 
+            // Scrolled area for definitions
             gtk::ScrolledWindow {
                 set_hscrollbar_policy: gtk::PolicyType::Never,
                 set_vscrollbar_policy: gtk::PolicyType::Automatic,
                 set_vexpand: true,
+                set_min_content_height: 300,
 
-                // This ensures the scrolled window doesn't collapse
-                set_min_content_height: 200,
-
-
-
-                #[name = "definition_label"]
-                gtk::Label {
-                    #[watch]
-                    set_label: &model.definition,
-                    set_wrap: true,
-                    set_xalign: 0.0,
-                    set_yalign: 0.0,
-                    set_selectable: true,
-                    set_justify: gtk::Justification::Left,
-                    set_use_markup: true,
-                    set_margin_all: 20,
-                },
-
-                #[name = "lexicon_label"]
-                gtk::Label {
-                    #[watch]
-                    set_label: &model.lexicon,
-                    set_wrap: true,
-                    set_xalign: 0.0,
-                    set_yalign: 0.0,
-                    set_selectable: true,
-                    set_justify: gtk::Justification::Left,
-                    set_use_markup: true,
-                    set_margin_all: 20,
+                #[name = "results_list"]
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 24,
+                    set_margin_horizontal: 24,
+                    set_margin_bottom: 40,
+                    // Dynamic results (Headings + Definitions) injected here
                 }
             }
         }
@@ -107,9 +81,7 @@ impl Component for DictionaryPage {
     ) -> ComponentParts<Self> {
         let model = DictionaryPage {
             engine: init,
-            key: "Heavens".to_string(),
-            definition: "".to_string(),
-            lexicon: "".to_string(),
+            key: "Dictionary".to_string(),
         };
 
         let widgets = view_output!();
@@ -126,9 +98,79 @@ impl Component for DictionaryPage {
     ) {
         match message {
             DictionaryInputMessage::Lookup(query) => {
-                self.key = query.clone().word;
+                // Update the visible header key immediately
+                let new_key = if !query.word.is_empty() {
+                    query.word.clone()
+                } else {
+                    query
+                        .strongs
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "Lookup".to_string())
+                };
+                self.key = new_key.clone();
+
+                // 2. FORCE the Widget Update (This fixes the "Dictionary" stuck bug)
+                widgets.header_label.set_label(&new_key);
+
+                // Perform the backend search
                 let lookup_result = self.engine.lookup_dictionary(query);
-                println!("Recieved: {:?}", lookup_result);
+
+                // 1. Clear the results box for the new search
+                while let Some(child) = widgets.results_list.first_child() {
+                    widgets.results_list.remove(&child);
+                }
+
+                // 2. Handle empty results
+                if lookup_result.results.is_empty() {
+                    let empty_label = gtk::Label::builder()
+                        .label("No definitions found in installed modules.")
+                        .css_classes(vec!["dim-label"])
+                        .xalign(0.0)
+                        .margin_top(20)
+                        .build();
+                    widgets.results_list.append(&empty_label);
+                    return;
+                }
+
+                // 3. Populate results with Source Heading + Definition Body
+                for result in lookup_result.results {
+                    let reuslt_body = self.engine.format_for_pango(&result.definition);
+                    let result_box = gtk::Box::builder()
+                        .orientation(gtk::Orientation::Vertical)
+                        .spacing(8)
+                        .build();
+
+                    // Module Name Heading (e.g., "Webster 1828")
+                    let source_heading = gtk::Label::builder()
+                        .label(&format!("Source: {}", result.module_name))
+                        .xalign(0.0)
+                        .css_classes(vec!["title-4", "accent"])
+                        .build();
+
+                    // Definition Text (Supports Pango Markup)
+                    let definition_body = gtk::Label::builder()
+                        .label(reuslt_body)
+                        .use_markup(true)
+                        .wrap(true)
+                        .selectable(true)
+                        .xalign(0.0)
+                        .justify(gtk::Justification::Left)
+                        .build();
+
+                    // Add a separator for better visual parsing
+                    let separator = gtk::Separator::builder()
+                        .orientation(gtk::Orientation::Horizontal)
+                        .margin_top(16)
+                        .opacity(0.3)
+                        .build();
+
+                    result_box.append(&source_heading);
+                    result_box.append(&definition_body);
+                    result_box.append(&separator);
+
+                    widgets.results_list.append(&result_box);
+                }
             }
         }
     }

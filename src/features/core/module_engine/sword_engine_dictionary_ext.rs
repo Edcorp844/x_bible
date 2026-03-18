@@ -28,14 +28,14 @@ impl SwordEngine {
         let dict_modules = self.get_dictionary_modules();
 
         for module in dict_modules {
-            let mut search_keys = query.strongs.clone();
+            let mut search_keys = Vec::new(); //query.strongs.clone();
             if !query.word.is_empty() {
                 search_keys.push(query.word.clone());
             }
 
             for key in search_keys {
                 // TRY PADDING: If it's a Strong's number, try H06440 instead of H6440
-                let keys_to_try = if key.starts_with('H') || key.starts_with('G') {
+                /*let keys_to_try = if key.starts_with('H') || key.starts_with('G') {
                     if key.len() < 6 {
                         vec![key.clone(), format!("{}{:0>4}", &key[0..1], &key[1..])]
                     } else {
@@ -43,7 +43,9 @@ impl SwordEngine {
                     }
                 } else {
                     vec![key.clone(), key.to_uppercase(), key.to_lowercase()]
-                };
+                };*/
+
+                let keys_to_try = vec![key.clone(), key.to_uppercase(), key.to_lowercase()];
 
                 for k in keys_to_try {
                     if let Some(definition) = self.get_dictionary_entry_direct(&module.name, &k) {
@@ -57,6 +59,7 @@ impl SwordEngine {
                 }
             }
         }
+        println!("{:?}", results);
         DictionaryResponse { results }
     }
 

@@ -16,8 +16,12 @@ use crate::features::bible::components::page_theme::customize_theme_popup::{
 };
 use crate::features::core::display_configurations::Config::TextConfig;
 use crate::features::core::module_engine::sword_engine::SwordEngine;
+use crate::features::core::module_engine::sword_engine_books_and_chapter_ext::{
+    CategorizedBook, Testament,
+};
 use crate::features::core::module_engine::sword_engine_dictionary_ext::DictionaryQuery;
 use crate::features::core::module_engine::sword_module::SwordModule;
+
 pub struct BiblePage {
     pub(crate) engine: Arc<SwordEngine>,
     pub(crate) module: SwordModule,
@@ -25,12 +29,18 @@ pub struct BiblePage {
     pub(crate) config: TextConfig,
     pub(crate) customize_theme_popup: Option<Controller<CustomizeThemePopup>>,
     pub(crate) annotations: Annotations,
+
+    pub(crate) current_book_index: usize,
+    pub(crate) current_book: CategorizedBook,
+    pub(crate) current_chapter: i32,
 }
 
 #[derive(Debug)]
 pub enum StudyInput {
     LoadReference(String),
-    SetModule(String),
+    SetModule(SwordModule),
+    SetBook(usize),
+    SetChapter(i32),
     ToggleDisplay(VerseInputMessage),
     SetConfig(TextConfig),
     OpenCustomizethemePopup,
@@ -45,7 +55,7 @@ pub enum StudyPageOutput {
 
 #[relm4::component(pub)]
 impl Component for BiblePage {
-    type Init = (Arc<SwordEngine>, String, String);
+    type Init = Arc<SwordEngine>;
     type Input = StudyInput;
     type Output = StudyPageOutput;
     type CommandOutput = ();
@@ -64,10 +74,151 @@ impl Component for BiblePage {
                         "page-overlay",
                         &model.make_css_preview_clss(model.config.read().unwrap().theme())
                     ],
-                    // LAYER 1: BIBLE TEXT
+
+                 gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_halign: gtk::Align::Fill,
+                    set_hexpand: true,
+
+                    gtk::Box {
+                        add_css_class: "linked",
+                        add_css_class: "rounded",
+                        set_halign: gtk::Align::Center,
+                        set_margin_bottom: 10,
+
+                        gtk::MenuButton {
+                            set_tooltip_text: Some("Select Version"),
+                            #[wrap(Some)]
+                            set_child = &gtk::Box {
+                                set_spacing: 4,
+                                #[name = "version_label"]
+                                gtk::Label { set_label: &model.module.name },
+                                gtk::Image { set_icon_name: Some("pan-down-symbolic") },
+                            },
+
+                            #[name = "version_popover"]
+                            #[wrap(Some)]
+                            set_popover = &gtk::Popover {
+                                set_autohide: true,
+                                gtk::ScrolledWindow {
+                                    set_hscrollbar_policy: gtk::PolicyType::Never,
+                                    set_min_content_width: 600,
+                                    set_min_content_height: 400,
+                                    set_max_content_height: 600,
+                                    #[name = "bible_grid"]
+                                    gtk::FlowBox {
+                                        set_valign: gtk::Align::Start,
+                                        set_max_children_per_line: 3,
+                                        set_min_children_per_line: 3,
+                                        set_selection_mode: gtk::SelectionMode::None,
+                                        set_column_spacing: 12,
+                                        set_row_spacing: 12,
+                                        set_margin_all: 12,
+                                    },
+                                },
+                            },
+                        },
+
+                        gtk::MenuButton {
+                            set_tooltip_text: Some("Select Book"),
+                            #[name = "book_popover"]
+                            #[wrap(Some)]
+                            set_popover = &gtk::Popover {
+                                gtk::ScrolledWindow {
+                                    set_hscrollbar_policy: gtk::PolicyType::Never,
+                                    set_min_content_width: 600,
+                                    set_min_content_height: 400,
+                                    set_max_content_height: 600,
+                                    gtk::Box {
+                                        set_orientation: gtk::Orientation::Vertical,
+                                        set_spacing: 10,
+                                        set_margin_all: 12,
+                                        #[name = "ot_container"]
+                                        gtk::Box {
+                                            set_orientation: gtk::Orientation::Vertical,
+                                            set_visible: false,
+                                            gtk::Label {
+                                                set_label: "Old Testament",
+                                                set_halign: gtk::Align::Start,
+                                                add_css_class: "title-4",
+                                                set_margin_bottom: 8,
+                                            },
+                                            #[name = "ot_grid"]
+                                            gtk::FlowBox {
+                                                set_max_children_per_line: 4,
+                                                set_min_children_per_line: 4,
+                                                set_selection_mode: gtk::SelectionMode::None,
+                                                set_column_spacing: 8,
+                                                set_row_spacing: 8,
+                                            },
+                                        },
+                                        #[name = "nt_container"]
+                                        gtk::Box {
+                                            set_orientation: gtk::Orientation::Vertical,
+                                            set_visible: false,
+                                            set_margin_top: 20,
+                                            gtk::Label {
+                                                set_label: "New Testament",
+                                                set_halign: gtk::Align::Start,
+                                                add_css_class: "title-4",
+                                                set_margin_bottom: 8,
+                                            },
+                                            #[name = "nt_grid"]
+                                            gtk::FlowBox {
+                                                set_max_children_per_line: 4,
+                                                set_min_children_per_line: 4,
+                                                set_selection_mode: gtk::SelectionMode::None,
+                                                set_column_spacing: 8,
+                                                set_row_spacing: 8,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            #[wrap(Some)]
+                            set_child = &gtk::Box {
+                                set_spacing: 4,
+                                #[name = "book_label"]
+                                gtk::Label { set_label: &model.current_book.name },
+                                gtk::Image { set_icon_name: Some("pan-down-symbolic") },
+                            },
+                        },
+
+                        gtk::MenuButton {
+                            set_tooltip_text: Some("Select Chapter"),
+                            #[name = "chapter_popover"]
+                            #[wrap(Some)]
+                            set_popover = &gtk::Popover {
+                                gtk::ScrolledWindow {
+                                    set_hscrollbar_policy: gtk::PolicyType::Never,
+                                    set_min_content_width: 300,
+                                    set_min_content_height: 400,
+                                    set_max_content_height: 600,
+                                    #[name = "chapter_grid"]
+                                    gtk::FlowBox {
+                                        set_valign: gtk::Align::Start,
+                                        set_max_children_per_line: 5,
+                                        set_min_children_per_line: 5,
+                                        set_selection_mode: gtk::SelectionMode::None,
+                                        set_column_spacing: 6,
+                                        set_row_spacing: 6,
+                                        set_margin_all: 12,
+                                    },
+                                },
+                            },
+                            #[wrap(Some)]
+                            set_child = &gtk::Box {
+                                set_spacing: 4,
+                                #[name = "chapter_label"]
+                                gtk::Label { set_label: &format!("Chapter {}", model.current_chapter) },
+                                gtk::Image { set_icon_name: Some("pan-down-symbolic") },
+                            },
+                        },
+                    },
 
                     gtk::ScrolledWindow {
                         set_vexpand: true,
+                        set_hexpand: true,
                         set_hscrollbar_policy: gtk::PolicyType::Never,
                         #[local_ref]
                         section_list -> gtk::Box {
@@ -75,53 +226,44 @@ impl Component for BiblePage {
                             set_margin_all: 30,
                         },
                     },
+                  },
 
-                    // LAYER 2: BACKGROUND DIMMING
-                    #[name = "dim_scrim"]
-                    add_overlay = &gtk::Box {
-                        add_css_class: "dim-scrim",
-                        set_visible: false,
-                        set_can_target: false,
-                    },
+                  #[name = "dim_scrim"]
+                  add_overlay = &gtk::Box {
+                      add_css_class: "dim-scrim",
+                      set_visible: false,
+                      set_can_target: false,
+                  },
 
-                    // LAYER 3: THE MENU (PINNED TO BOTTOM-RIGHT)
-                    #[name = "overlay_container"]
-                    add_overlay = &gtk::Box {
-                        set_halign: gtk::Align::End,
-                        set_valign: gtk::Align::End,
-                        set_margin_all: 25,
-                        // Ensure this outer box doesn't grow taller than its content
-                        set_vexpand: false,
+                  #[name = "overlay_container"]
+                  add_overlay = &gtk::Box {
+                      set_halign: gtk::Align::End,
+                      set_valign: gtk::Align::End,
+                      set_margin_all: 25,
+                      set_vexpand: false,
 
-                        #[name = "menu_card"]
-                        gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            add_css_class: "page-menu-card",
-                            //add_css_class: "osd",
-                            set_spacing: 0,
-                            set_valign: gtk::Align::End,
+                      #[name = "menu_card"]
+                      gtk::Box {
+                          set_orientation: gtk::Orientation::Vertical,
+                          add_css_class: "page-menu-card",
+                          set_spacing: 0,
+                          set_valign: gtk::Align::End,
 
+                          #[name = "menu_button"]
+                          gtk::Button {
+                              add_css_class: "circular",
+                              add_css_class: "osd",
+                              add_css_class: "studypage-menu-trigger-btn",
+                              set_has_frame: false,
+                              set_width_request: 64,
+                              set_height_request: 64,
+                              set_halign: gtk::Align::Center,
+                              set_valign: gtk::Align::Start,
+                              gtk::Image { set_icon_name: Some("page-menu-symbolic"), set_pixel_size: 24 }
+                          },
 
-                            // TOP ELEMENT: THE BUTTON
-                            #[name = "menu_button"]
-                            gtk::Button {
-                                add_css_class: "circular",
-                                add_css_class: "osd",
-                                add_css_class: "studypage-menu-trigger-btn",
-                                set_has_frame: false,
-                                set_width_request: 64,
-                                set_height_request: 64,
-                                set_halign: gtk::Align::Center,
-                                set_valign: gtk::Align::Start,
-
-                                gtk::Image {
-                                    set_icon_name: Some("page-menu-symbolic"),
-                                    set_pixel_size: 24,
-                                }
-                            },
-
-                            // BOTTOM ELEMENT: THE REVEALER
-                            #[name = "options_revealer"]
+                           // BOTTOM ELEMENT: THE REVEALER
+                          #[name = "options_revealer"]
                             gtk::Revealer {
                                 set_transition_type: gtk::RevealerTransitionType::SlideDown,
                                 set_transition_duration: 250,
@@ -135,7 +277,6 @@ impl Component for BiblePage {
                                     set_spacing: 10,
                                     set_width_request: 350,
                                     // Strict margins: Top is 0 to touch the button
-
 
                                     // SECTION: FONT SIZE
                                     gtk::Box {
@@ -172,6 +313,7 @@ impl Component for BiblePage {
                                                 set_icon_name: Some("font-letter-symbolic"),
                                             },
 
+
                                             gtk::Scale::with_range(gtk::Orientation::Horizontal, 12.0, 32.0, 1.0) {
                                                 set_hexpand: true,
                                                 add_css_class: "accent",
@@ -207,7 +349,7 @@ impl Component for BiblePage {
                                                 set_xalign: 0.0,
                                             },
 
-                                            gtk::ScrolledWindow {
+                                             gtk::ScrolledWindow {
                                                 set_hscrollbar_policy: gtk::PolicyType::Automatic,
                                                 set_vscrollbar_policy: gtk::PolicyType::Never,
                                                 set_hexpand: true,
@@ -274,8 +416,7 @@ impl Component for BiblePage {
                                                 set_max_children_per_line: 1,
                                                 set_min_children_per_line: 1,
 
-
-                                                gtk::CheckButton {
+                                                 gtk::CheckButton {
                                                     set_label: Some("Words of Christ in Red"),
                                                     #[watch]
                                                     set_active: model.config.read().unwrap().christ_words_red(),
@@ -316,7 +457,7 @@ impl Component for BiblePage {
 
                                              },
 
-                                            gtk::Label{
+                                              gtk::Label{
                                                 set_label: "Lexicons",
                                                 add_css_class: "title-5",
                                                 set_xalign: 0.0,
@@ -362,10 +503,9 @@ impl Component for BiblePage {
                                                     }
                                                 },
 
-
                                             },
                                         },
-                                        gtk::Box {
+                                         gtk::Box {
                                                 set_spacing: 8,
                                                 set_homogeneous: true,
                                                 set_margin_end: 20,
@@ -384,10 +524,10 @@ impl Component for BiblePage {
                                                 },
                                         }
                                     }
-                                }
-                            }
-                        }
-                    }
+                              }
+                          }
+                      }
+                  }
                 }
             }
         }
@@ -398,31 +538,39 @@ impl Component for BiblePage {
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let (engine, module, query) = init;
-        let section_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let engine = init;
+        let section_list = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let sections = FactoryVecDeque::builder()
-            .launch(section_container)
+            .launch(section_list.clone())
             .forward(sender.output_sender(), move |message| match message {
                 SectionOutput::Lookup(query) => StudyPageOutput::LookupSelectedStrong(query),
             });
 
         let modules = engine.get_bible_modules();
-
-        let module = modules.first().unwrap();
+        let first_module = modules.first().cloned().expect("No Bible modules found");
+        let categorized = engine.get_categorized_books(&first_module.name);
+        let initial_book = categorized.first().cloned().expect("Module has no books");
 
         let model = BiblePage {
             engine,
-            module: module.clone(),
+            module: first_module,
+            current_book_index: 0,
+            current_book: initial_book,
+            current_chapter: 1,
             sections,
             config: Arc::new(RwLock::new(PageDisplayConfig::new())),
             customize_theme_popup: None,
             annotations: AnnotationSettings::load_all(),
         };
 
-        let section_list = model.sections.widget();
         let widgets = view_output!();
-        let motion = gtk::EventControllerMotion::new();
 
+        Self::populate_version_grid(&widgets, &modules, sender.clone());
+        model.populate_book_grid(&widgets, &categorized, sender.clone());
+        model.populate_chapter_grid(&widgets, sender.clone());
+
+        // Setup Overlay Animations
+        let motion = gtk::EventControllerMotion::new();
         let options_revealer = &widgets.options_revealer;
         let dim_scrim = &widgets.dim_scrim;
         let menu_button = &widgets.menu_button;
@@ -453,24 +601,23 @@ impl Component for BiblePage {
             move |_| {
                 options_revealer.set_reveal_child(false);
                 dim_scrim.set_visible(false);
-
                 menu_button.set_opacity(1.0);
                 menu_button.set_can_target(true);
             }
         ));
 
-        options_revealer.connect_child_revealed_notify(move |rev| {
-            if !rev.reveals_child() && !rev.is_child_revealed() {
-                rev.set_visible(false);
-            }
-        });
+        widgets
+            .options_revealer
+            .connect_child_revealed_notify(|rev| {
+                if !rev.reveals_child() && !rev.is_child_revealed() {
+                    rev.set_visible(false);
+                }
+            });
 
         widgets.overlay_container.add_controller(motion);
+        model.populate_fonts_container(&widgets.menu_fonts_container, sender.clone());
+        sender.input(StudyInput::LoadReference("Gen 1".to_string()));
 
-        let menu_fonts_container = widgets.menu_fonts_container.clone();
-        model.populate_fonts_container(&menu_fonts_container, sender.clone());
-
-        sender.input(StudyInput::LoadReference(query));
         ComponentParts { model, widgets }
     }
 
@@ -483,58 +630,171 @@ impl Component for BiblePage {
     ) {
         match message {
             StudyInput::LoadReference(refe) => self.load_reference(&refe),
+            StudyInput::SetModule(module) => {
+                self.module = module;
+                widgets.version_label.set_label(&self.module.name);
+                let books = self.engine.get_categorized_books(&self.module.name);
+                self.populate_book_grid(widgets, &books, sender.clone());
+                if let Some(first_book) = books.first() {
+                    sender.input(StudyInput::SetBook(first_book.index));
+                }
+            }
+            StudyInput::SetBook(index) => {
+                self.current_book_index = index;
+                self.current_chapter = 1;
+                let books = self.engine.get_categorized_books(&self.module.name);
+                if let Some(book) = books.iter().find(|b| b.index == index) {
+                    self.current_book = book.clone();
+                    widgets.book_label.set_label(&book.name);
+                }
+                widgets.chapter_label.set_label("Chapter 1");
+                self.populate_chapter_grid(widgets, sender.clone());
+                let book_name = self.engine.get_book_name(&self.module.name, index);
+                sender.input(StudyInput::LoadReference(format!("{} 1", book_name)));
+            }
+            StudyInput::SetChapter(chapter) => {
+                self.current_chapter = chapter;
+                widgets
+                    .chapter_label
+                    .set_label(&format!("Chapter {}", chapter));
+                let book_name = self
+                    .engine
+                    .get_book_name(&self.module.name, self.current_book_index);
+                sender.input(StudyInput::LoadReference(format!(
+                    "{} {}",
+                    book_name, chapter
+                )));
+            }
             StudyInput::OpenCustomizethemePopup => {
                 let controller = CustomizeThemePopup::builder()
                     .launch((self.config.clone(), self.engine.clone()))
-                    .forward(sender.input_sender(), move |msg| match msg {
+                    .forward(sender.input_sender(), |msg| match msg {
                         CustomizeThemeOutput::Close => StudyInput::CloseCustomizethemePopup,
                         CustomizeThemeOutput::SaveConfig(config) => StudyInput::SetConfig(config),
                     });
-
                 controller.widget().present();
                 self.customize_theme_popup = Some(controller);
             }
             StudyInput::CloseCustomizethemePopup => {
-                if let Some(controller) = self.customize_theme_popup.take() {
-                    controller.widget().close();
+                if let Some(c) = self.customize_theme_popup.take() {
+                    c.widget().close();
                 }
             }
-            // StudyInput::SelectStrong(_) => {}
-            //StudyInput::SetModule(name) => self.module = name,
-            StudyInput::ToggleDisplay(factory_msg) => {
-                self.config.write().unwrap().apply_message(&factory_msg);
+            StudyInput::ToggleDisplay(msg) => {
+                self.config.write().unwrap().apply_message(&msg);
                 for i in 0..self.sections.len() {
                     self.sections
-                        .send(i, SectionInput::ToggleDisplay(factory_msg.clone()));
+                        .send(i, SectionInput::ToggleDisplay(msg.clone()));
                 }
-                let theme = self.config.read().unwrap().theme();
-                let new_class = self.make_css_preview_clss(theme.clone());
-
-                //remove old theme classes first
+                let class = self.make_css_preview_clss(self.config.read().unwrap().theme());
                 widgets
                     .page_overlay
-                    .remove_css_class("preview-area-Classic");
-                widgets.page_overlay.remove_css_class("preview-area-Modern");
-                widgets
-                    .page_overlay
-                    .remove_css_class("preview-area-Default");
-                widgets
-                    .page_overlay
-                    .remove_css_class("preview-area-Compact");
-
-                // add the new one
-                widgets.page_overlay.add_css_class(&new_class);
-
-                let _ = sender.output(StudyPageOutput::ChangeTheme);
-                self.populate_fonts_container(&widgets.menu_fonts_container, sender);
+                    .set_css_classes(&["page-overlay", &class]);
             }
             StudyInput::SetConfig(config) => {
                 sender.input(StudyInput::ToggleDisplay(
                     VerseInputMessage::UpdateDisplayConf(config),
                 ));
-                self.populate_fonts_container(&widgets.menu_fonts_container, sender);
             }
-            _ => {}
         }
+    }
+}
+
+impl BiblePage {
+    fn populate_version_grid(
+        widgets: &BiblePageWidgets,
+        modules: &[SwordModule],
+        sender: ComponentSender<Self>,
+    ) {
+        while let Some(child) = widgets.bible_grid.first_child() {
+            widgets.bible_grid.remove(&child);
+        }
+        for module in modules {
+            let m = module.clone();
+            let tile = Self::create_bible_tile(&module.name, &module.language);
+            let s = sender.clone();
+            let pop = widgets.version_popover.clone();
+            tile.connect_clicked(move |_| {
+                s.input(StudyInput::SetModule(m.clone()));
+                pop.popdown();
+            });
+            widgets.bible_grid.append(&tile);
+        }
+    }
+
+    fn populate_book_grid(
+        &self,
+        widgets: &BiblePageWidgets,
+        books: &[CategorizedBook],
+        sender: ComponentSender<Self>,
+    ) {
+        while let Some(child) = widgets.ot_grid.first_child() {
+            widgets.ot_grid.remove(&child);
+        }
+        while let Some(child) = widgets.nt_grid.first_child() {
+            widgets.nt_grid.remove(&child);
+        }
+        let mut has_ot = false;
+        let mut has_nt = false;
+        for book in books {
+            let btn = Self::create_book_tile(&book.name);
+            let idx = book.index;
+            let s = sender.clone();
+            let pop = widgets.book_popover.clone();
+            btn.connect_clicked(move |_| {
+                s.input(StudyInput::SetBook(idx));
+                pop.popdown();
+            });
+            match book.testament {
+                Testament::Old => {
+                    widgets.ot_grid.append(&btn);
+                    has_ot = true;
+                }
+                Testament::New => {
+                    widgets.nt_grid.append(&btn);
+                    has_nt = true;
+                }
+            }
+        }
+        widgets.ot_container.set_visible(has_ot);
+        widgets.nt_container.set_visible(has_nt);
+    }
+
+    fn populate_chapter_grid(&self, widgets: &BiblePageWidgets, sender: ComponentSender<Self>) {
+        while let Some(child) = widgets.chapter_grid.first_child() {
+            widgets.chapter_grid.remove(&child);
+        }
+        let count = self
+            .engine
+            .get_chapter_count(&self.module.name, self.current_book_index);
+        for i in 1..=count {
+            let btn = gtk::Button::builder()
+                .label(&i.to_string())
+                .css_classes(vec!["card", "chapter-tile"])
+                .build();
+            let s = sender.clone();
+            let pop = widgets.chapter_popover.clone();
+            btn.connect_clicked(move |_| {
+                s.input(StudyInput::SetChapter(i as i32));
+                pop.popdown();
+            });
+            widgets.chapter_grid.append(&btn);
+        }
+    }
+
+    fn create_bible_tile(name: &str, lang: &str) -> gtk::Button {
+        gtk::Button::builder()
+            .label(&format!("{} ({})", name, lang))
+            .css_classes(vec!["card", "book-tile"])
+            .build()
+    }
+
+    fn create_book_tile(name: &str) -> gtk::Button {
+        gtk::Button::builder()
+            .label(name)
+            .css_classes(vec!["card", "book-tile"])
+            .width_request(85)
+            .height_request(40)
+            .build()
     }
 }

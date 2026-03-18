@@ -213,3 +213,17 @@ label {
     background-color: var(--warning-bg-color);
     border-radius: 5px;
 }
+
+popover .chapter-tile {
+    min-width: 46px;
+    min-height: 46px;
+    font-family: "Monospace";
+    font-size: 1.1rem;
+}
+
+/* Specific styling for Book Tiles */
+popover .book-tile {
+    min-width: 100px;
+    margin: 2px;
+    padding: 5px,
+}

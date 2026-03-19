@@ -3,6 +3,9 @@ use gtk::glib::clone;
 use relm4::prelude::*;
 use std::sync::{Arc, RwLock};
 
+use crate::features::bible::components::page::biblepage_settings::{
+    BiblePageSettings, BiblePageState,
+};
 use crate::features::bible::components::page::helpers::{AddedWordStyle, PageDisplayConfig};
 use crate::features::bible::components::page::section::{
     SectionInput, SectionModel, SectionOutput,
@@ -106,14 +109,8 @@ impl Component for BiblePage {
                                     set_min_content_height: 400,
                                     set_max_content_height: 600,
                                     #[name = "bible_grid"]
-                                    gtk::FlowBox {
-                                        set_valign: gtk::Align::Start,
-                                        set_max_children_per_line: 3,
-                                        set_min_children_per_line: 3,
-                                        set_selection_mode: gtk::SelectionMode::None,
-                                        set_column_spacing: 12,
-                                        set_row_spacing: 12,
-                                        set_margin_all: 12,
+                                    gtk::Box {
+                                        set_orientation: gtk::Orientation::Vertical,
                                     },
                                 },
                             },
@@ -539,6 +536,8 @@ impl Component for BiblePage {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let engine = init;
+
+        // 1. Setup Sections Factory
         let section_list = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let sections = FactoryVecDeque::builder()
             .launch(section_list.clone())
@@ -546,34 +545,73 @@ impl Component for BiblePage {
                 SectionOutput::Lookup(query) => StudyPageOutput::LookupSelectedStrong(query),
             });
 
+        // 2. Load Saved Session / Resolve Active Module
+        let saved_state = BiblePageSettings::load();
         let modules = engine.get_bible_modules();
-        let first_module = modules.first().cloned().expect("No Bible modules found");
-        let categorized = engine.get_categorized_books(&first_module.name);
-        let initial_book = categorized.first().cloned().expect("Module has no books");
 
-        let model = BiblePage {
-            engine,
-            module: first_module,
-            current_book_index: 0,
-            current_book: initial_book,
-            current_chapter: 1,
-            sections,
-            config: Arc::new(RwLock::new(PageDisplayConfig::new())),
-            customize_theme_popup: None,
-            annotations: AnnotationSettings::load_all(),
+        let active_module = if let Some(saved_name) = saved_state.last_module {
+            modules.iter().find(|m| m.name == saved_name).cloned()
+        } else {
+            modules.first().cloned()
+        };
+
+        // 3. Resolve Book & Chapter
+        // We initialize these as options to safely handle the "No Module" case
+        let mut active_book = None;
+        let mut active_chapter = 1;
+        let mut categorized = Vec::new();
+
+        if let Some(ref m) = active_module {
+            categorized = engine.get_categorized_books(&m.name);
+
+            active_book = if let Some(saved_b) = saved_state.last_book {
+                categorized.iter().find(|b| b.name == saved_b).cloned()
+            } else {
+                categorized.first().cloned()
+            };
+
+            active_chapter = saved_state.last_chapter.unwrap_or(1);
+        }
+
+        // 4. Safety Check: If we still have nothing, handle gracefully before unwrap
+        if active_module.is_none() {
+            eprintln!("No modules found. Please install a SWORD module.");
+            // Note: If your struct REQUIRES a module, you might need a dummy fallback
+            // or to change your struct fields to Option<SwordModule>
+        }
+
+        // 5. Initialize Model
+        // Replace your model initialization with this safer version
+        let model = if let (Some(m), Some(b)) = (active_module, active_book) {
+            BiblePage {
+                engine,
+                module: m,
+                current_book_index: 0,
+                current_book: b,
+                current_chapter: active_chapter,
+                sections,
+                config: Arc::new(RwLock::new(PageDisplayConfig::new())),
+                customize_theme_popup: None,
+                annotations: AnnotationSettings::load_all(),
+            }
+        } else {
+            // Return a 'Safe' or 'Empty' state model here
+            // instead of crashing with .expect()
+            panic!("XBible cannot start: No valid Bible modules found or module corrupted.");
         };
 
         let widgets = view_output!();
 
+        // 6. Populate UI Components
         Self::populate_version_grid(&widgets, &modules, sender.clone());
         model.populate_book_grid(&widgets, &categorized, sender.clone());
         model.populate_chapter_grid(&widgets, sender.clone());
 
-        // Setup Overlay Animations
+        // 7. Setup Overlay Animations
         let motion = gtk::EventControllerMotion::new();
-        let options_revealer = &widgets.options_revealer;
-        let dim_scrim = &widgets.dim_scrim;
-        let menu_button = &widgets.menu_button;
+        let options_revealer = widgets.options_revealer.clone();
+        let dim_scrim = widgets.dim_scrim.clone();
+        let menu_button = widgets.menu_button.clone();
 
         motion.connect_enter(clone!(
             #[weak]
@@ -616,7 +654,10 @@ impl Component for BiblePage {
 
         widgets.overlay_container.add_controller(motion);
         model.populate_fonts_container(&widgets.menu_fonts_container, sender.clone());
-        sender.input(StudyInput::LoadReference("Gen 1".to_string()));
+
+        // Load initial reference
+        let initial_ref = format!("{} {}", model.current_book.name, model.current_chapter);
+        sender.input(StudyInput::LoadReference(initial_ref));
 
         ComponentParts { model, widgets }
     }
@@ -629,7 +670,14 @@ impl Component for BiblePage {
         _root: &Self::Root,
     ) {
         match message {
-            StudyInput::LoadReference(refe) => self.load_reference(&refe),
+            StudyInput::LoadReference(refe) => {
+                self.load_reference(&refe);
+                BiblePageSettings::save(BiblePageState {
+                    last_module: Some(self.module.name.clone()),
+                    last_book: Some(self.current_book.name.clone()),
+                    last_chapter: Some(self.current_chapter),
+                });
+            }
             StudyInput::SetModule(module) => {
                 self.module = module;
                 widgets.version_label.set_label(&self.module.name);
@@ -710,16 +758,65 @@ impl BiblePage {
         while let Some(child) = widgets.bible_grid.first_child() {
             widgets.bible_grid.remove(&child);
         }
+
+        let mut grouped: std::collections::BTreeMap<String, Vec<SwordModule>> =
+            std::collections::BTreeMap::new();
         for module in modules {
-            let m = module.clone();
-            let tile = Self::create_bible_tile(&module.name, &module.language);
-            let s = sender.clone();
-            let pop = widgets.version_popover.clone();
-            tile.connect_clicked(move |_| {
-                s.input(StudyInput::SetModule(m.clone()));
-                pop.popdown();
-            });
-            widgets.bible_grid.append(&tile);
+            grouped
+                .entry(module.language.clone())
+                .or_default()
+                .push(module.clone());
+        }
+
+        for (lang, lang_modules) in grouped {
+            // --- Language Header ---
+            let header_label = gtk::Label::builder()
+                .halign(gtk::Align::Start)
+                .margin_top(20) // More space above for "High-End" feel
+                .margin_bottom(12) // Space below the header
+                .margin_start(16) // Inline margin
+                .build();
+
+            header_label.set_markup(&format!(
+                "<span size='small' weight='heavy' alpha='60%' letter_spacing='1200'>{}</span>",
+                lang.to_uppercase()
+            ));
+
+            widgets.bible_grid.append(&header_label);
+
+            // --- The Grid (Using WrapBox with constant width logic) ---
+            let wrap_box = adw::WrapBox::builder()
+            .orientation(gtk::Orientation::Horizontal)
+                .line_spacing(5) // Space between columns
+                .child_spacing(5) // Space between rows
+                .margin_start(10)
+                .margin_end(10)
+                .margin_bottom(20)
+                .build();
+
+            for module in lang_modules {
+                let m = module.clone();
+                // Use the updated tile with constant width
+                let tile = Self::create_bible_tile(&module.name, &module.language);
+                let s = sender.clone();
+                let pop = widgets.version_popover.clone();
+
+                tile.connect_clicked(move |_| {
+                    s.input(StudyInput::SetModule(m.clone()));
+                    pop.popdown();
+                });
+
+                wrap_box.append(&tile);
+            }
+
+            widgets.bible_grid.append(&wrap_box);
+
+            // Subtle Separator
+            let sep = gtk::Separator::new(gtk::Orientation::Horizontal);
+            sep.set_opacity(0.1);
+            sep.set_margin_start(16);
+            sep.set_margin_end(16);
+            widgets.bible_grid.append(&sep);
         }
     }
 
@@ -783,11 +880,28 @@ impl BiblePage {
         }
     }
 
-    fn create_bible_tile(name: &str, lang: &str) -> gtk::Button {
-        gtk::Button::builder()
-            .label(&format!("{} ({})", name, lang))
-            .css_classes(vec!["card", "book-tile"])
-            .build()
+    fn create_bible_tile(name: &str, _lang: &str) -> gtk::Button {
+        let button = gtk::Button::builder()
+            // Constant Dimensions
+            .width_request(120)
+            .height_request(48)
+            .css_classes(vec!["card", "flat"])
+            .build();
+
+        // Centered, bold text for the module name
+        let label = gtk::Label::builder().build();
+
+        label.set_markup(&format!(
+            "<span weight='bold' size='medium' font_features='tnum'>{}</span>",
+            name
+        ));
+
+        button.set_child(Some(&label));
+
+        // Inline margin to prevent buttons from touching
+        button.set_margin_all(2);
+
+        button
     }
 
     fn create_book_tile(name: &str) -> gtk::Button {

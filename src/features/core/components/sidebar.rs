@@ -31,20 +31,25 @@ impl Component for SideBar {
 
     view! {
          adw::NavigationPage {
-            set_title: "FrostNews",
-            set_hexpand: true,
+            set_title: "XBible",
+            set_hexpand: false,
 
             #[wrap(Some)]
             set_child = &adw::ToolbarView{
                 add_top_bar=&adw::HeaderBar {
-                    set_show_title: false,
-                    pack_end = &gtk::Button {
-                        set_icon_name: "sidebar-show-symbolic",
-                        set_tooltip_text: Some("Hide Sidebar"),
+                    set_show_title: true,
+                     pack_start = &gtk::Button {
+                        set_icon_name: "system-search-symbolic",
+                        set_tooltip_text: Some("Search"),
                         add_css_class: "flat",
-                        connect_clicked[sender] => move |_| {
-                            let _ = sender.output(SidebarMessage::ToggleSidebar);
-                        }
+                    },
+
+
+
+                    pack_end = &gtk::Button {
+                        set_icon_name: "view-more-horizontal-symbolic",
+                        set_tooltip_text: Some("Main Menu"),
+                        add_css_class: "flat",
                     }
                 },
 
@@ -56,30 +61,23 @@ impl Component for SideBar {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 8,
 
-                        gtk::Label{
-                            set_label: "XBible",
-                            add_css_class: "title-1",
-                            add_css_class: "accent",
-                            add_css_class: "app-title",
-                            set_margin_all: 20,
-                            set_xalign: 0.0,
 
-                        },
 
                          gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 8,
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 8,
+                            set_margin_top: 20,
 
-                         #[name = "pages"]
-                        gtk::ListBox {
-                                // Start with None to prevent auto-selection during population
-                                set_selection_mode: gtk::SelectionMode::None,
-                                set_margin_horizontal: 12,
-                                add_css_class: "navigation-sidebar"
-                        }
-                    },
+                            #[name = "pages"]
+                            gtk::ListBox {
+                                    // Start with None to prevent auto-selection during population
+                                    set_selection_mode: gtk::SelectionMode::None,
+                                    set_margin_horizontal: 12,
+                                    add_css_class: "navigation-sidebar"
+                            }
+                        },
 
-                          #[name = "library_header"]
+                        #[name = "library_header"]
                         gtk::Box {
                             add_css_class: "sidebar-header-box",
                             set_margin_horizontal: 20,
@@ -92,6 +90,7 @@ impl Component for SideBar {
                             #[name = "library_chevron"]
                             gtk::Image { set_icon_name: Some("pan-down-symbolic"), add_css_class: "dimmed" }
                         },
+
                         #[name = "library_revealer"]
                         gtk::Revealer {
                             set_reveal_child: true,

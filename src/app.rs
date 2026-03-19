@@ -57,6 +57,8 @@ impl SimpleComponent for AppModel {
             #[name = "split_view"]
             adw::OverlaySplitView {
                 set_collapsed: true,
+                set_sidebar_width_fraction: 0.2,
+                set_max_sidebar_width: 150.0,
 
                 #[watch]
                 set_show_sidebar: model.is_sidebar_visible,
@@ -67,7 +69,6 @@ impl SimpleComponent for AppModel {
 
                 #[wrap(Some)]
                 set_sidebar = &gtk::Box {
-                    add_css_class: "sidebar-view",
                     #[local_ref]
                     sidebar_widget -> adw::NavigationPage {},
                 },

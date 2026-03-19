@@ -61,4 +61,10 @@
             <description>JSON map of VerseID to Annotation object (color, notes, bookmarks).</description>
         </key>
     </schema>
+    <schema id="org.flame.xbible.biblepage" path="/org/flame/xbible/biblepage/">
+        <key name="last-session" type="s">
+            <default>'{}'</default>
+            <summary>JSON string of the last read Bible location</summary>
+        </key>
+    </schema>
 </schemalist>

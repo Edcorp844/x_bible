@@ -4,6 +4,7 @@ use relm4::RelmApp; // Essential for trait methods like .connect_notify_local
 
 mod app;
 mod features;
+mod utils;
 
 #[allow(non_camel_case_types, non_upper_case_globals, non_snake_case)]
 mod sword_sys {

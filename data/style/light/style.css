@@ -33,31 +33,6 @@ label {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.book-cover {
-    background: linear-gradient(to right,
-            rgba(0, 0, 0, 0.2) 0%,
-            rgba(255, 255, 255, 0.1) 5%,
-            transparent 10%),
-        var(--dark-2);
-    /* Default book color */
-    border-radius: 4px 8px 8px 4px;
-    /* Curved right edge like pages */
-    box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.3);
-    padding: 1rem;
-    border-left: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.book-description-text {
-    font-size: 18px;
-    padding: 10px;
-    font-weight: normal;
-    color: #fff;
-}
-
-.book-title-caption {
-    font-weight: bold;
-    margin-top: 4px;
-}
 
 .lexical {
     background-color: alpha(var(--secondary-sidebar-bg-color), 0.4);
@@ -223,4 +198,17 @@ window.dark .preview-area-Modern {
 .key-underline {
     background-color: var(--warning-bg-color);
     border-radius: 5px;
+}
+
+popover .chapter-tile {
+    min-width: 46px;
+    min-height: 46px;
+    font-family: "Monospace";
+    font-size: 1.1rem;
+}
+
+popover .book-tile {
+    min-width: 100px;
+    margin: 2px;
+    padding: 5px,
 }

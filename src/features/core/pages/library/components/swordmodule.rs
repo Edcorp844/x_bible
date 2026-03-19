@@ -70,18 +70,22 @@ impl FactoryComponent for ModuleTile {
                     set_margin_all: 24,
                     set_orientation: gtk::Orientation::Vertical,
 
-                    gtk::Label {
+                   gtk::Label {
                         set_label: &self.module.description,
                         set_wrap: true,
                         set_justify: gtk::Justification::Center,
-                        set_max_width_chars: 14,
-                        inline_css: "color: white; font-weight: 700; font-size: 1.1rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);",
+                        set_max_width_chars: 16,
+                        inline_css: "color: white; font-weight: 800; font-size: 1.1rem; text-shadow: 0 2px 4px rgba(0,0,0,0.8);",
                     },
+
 
                     gtk::Label {
                         set_label: &format!("Version {}", self.module.version),
-                        set_margin_top: 12,
-                        inline_css: "color: rgba(255, 255, 255, 0.7); font-weight: 400; font-size: 0.85rem;",
+                        set_wrap: true,
+                        set_justify: gtk::Justification::Center,
+                        set_max_width_chars: 16,
+                        set_margin_top: 15,
+                        inline_css: "color: rgba(255, 255, 255, 0.7); font-weight: 400; font-size: 0.9rem;",
                     }
                 }
             },

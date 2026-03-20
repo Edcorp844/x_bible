@@ -1,5 +1,5 @@
 use adw::prelude::*;
-use relm4::{Component, ComponentParts, prelude::*};
+use relm4::{prelude::*, Component, ComponentParts};
 
 #[derive(Debug)]
 pub enum NavigationPage {
@@ -46,12 +46,76 @@ impl Component for SideBar {
 
 
 
-                    pack_end = &gtk::Button {
+                    pack_end = &gtk::MenuButton {
                         set_icon_name: "view-more-horizontal-symbolic",
                         set_tooltip_text: Some("Main Menu"),
                         add_css_class: "flat",
-                    }
-                },
+
+                        #[wrap(Some)]
+                        set_popover = &gtk::PopoverMenu::from_model(Some(&{
+                            let menu = gtk::gio::Menu::new();
+
+                            let appearance_item = gtk::gio::MenuItem::new(None, None);
+                            appearance_item.set_attribute_value("custom", Some(&"theme_selector".to_variant()));
+                            menu.append_item(&appearance_item);
+
+                            menu.append(Some("New Window"), Some("app.new_window"));
+
+                            let section = gtk::gio::Menu::new();
+
+                            let prefs_item = gtk::gio::MenuItem::new(Some("Preferences"), Some("app.preferences"));
+                            prefs_item.set_attribute_value("accel", Some(&"<Primary>comma".to_variant()));
+                            section.append_item(&prefs_item);
+
+                            let shortcuts_item = gtk::gio::MenuItem::new(Some("Keyboard Shortcuts"), Some("app.shortcuts"));
+                            shortcuts_item.set_attribute_value("accel", Some(&"<Primary>question".to_variant()));
+                            section.append_item(&shortcuts_item);
+
+                            let help_item = gtk::gio::MenuItem::new(Some("Help"), Some("app.help"));
+                            help_item.set_attribute_value("accel", Some(&"F1".to_variant()));
+                            section.append_item(&help_item);
+
+                            section.append(Some("About xBible"), Some("app.about"));
+
+                            menu.append_section(None, &section);
+                            menu
+                        })) {
+                            // 4. THE ACTUAL CIRCLES: Add the widget and link it to the "appearance" ID
+
+                            add_child:(&{
+                                let container = gtk::Box::builder()
+                                    .orientation(gtk::Orientation::Horizontal)
+                                    .spacing(12)
+                                    .halign(gtk::Align::Center)
+                                    .width_request(200)  // Force a width
+        .height_request(60)
+                                    .build();
+
+                                let create_theme_btn = |style_class: &str| {
+                                    let btn = gtk::CheckButton::builder().build();
+                                    // Add the classes from the XML
+                                    btn.add_css_class("theme-selector");
+                                    btn.add_css_class(style_class);
+                                    btn
+                                };
+
+                                let follow = create_theme_btn("follow");
+                                let light = create_theme_btn("light");
+                                let dark = create_theme_btn("dark");
+
+                                // Grouping is in the XML as 'group="light"'
+                                follow.set_group(Some(&light));
+                                dark.set_group(Some(&light));
+
+                                container.append(&follow);
+                                container.append(&light);
+                                container.append(&dark);
+
+                                container
+                            }, "theme_selector")
+                        }
+                    },
+                 },
 
                 #[wrap(Some)]
                 set_content = &gtk::ScrolledWindow {
@@ -117,6 +181,23 @@ impl Component for SideBar {
         let model = SideBar {};
 
         let widgets = view_output!();
+
+        // Inside your Component's init function
+        let main_menu = gtk::gio::Menu::new();
+
+        // 1. Top Section
+        main_menu.append(Some("Refresh Modules"), Some("app.refresh"));
+        main_menu.append(Some("Store"), Some("app.open_store"));
+
+        // 2. The Last Section (Preferences, Shortcuts, Help, About)
+        let last_section = gtk::gio::Menu::new();
+        last_section.append(Some("Preferences"), Some("app.preferences"));
+        last_section.append(Some("Keyboard Shortcuts"), Some("app.shortcuts"));
+        last_section.append(Some("Help"), Some("app.help"));
+        last_section.append(Some("About xBible"), Some("app.about"));
+
+        // Append as a section to create the visual horizontal divider
+        main_menu.append_section(None, &last_section);
 
         Self::setup_collapsible_section(
             &widgets.library_header,

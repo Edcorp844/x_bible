@@ -202,3 +202,47 @@ popover .book-tile {
     margin: 2px;
     padding: 5px,
 }
+
+
+/* This "draws" the circles */
+checkbutton.theme-selector {
+  padding: 0;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 9999px; /* Makes it a perfect circle */
+  border: 2px solid transparent;
+  transition: all 200ms ease;
+  background-clip: content-box;
+}
+
+/* The White Circle */
+checkbutton.theme-selector.light {
+  background-color: #ffffff;
+  border-color: rgba(0,0,0,0.1);
+}
+
+/* The Dark Circle */
+checkbutton.theme-selector.dark {
+  background-color: #242424;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* The "Follow" (System) Split Circle */
+checkbutton.theme-selector.follow {
+  background: linear-gradient(90deg, #ffffff 50%, #242424 50%);
+  border-color: rgba(0,0,0,0.1);
+}
+
+/* The "Active" state (The Orange Ring & Checkmark) */
+checkbutton.theme-selector:checked {
+  border-color: #E95420; /* Ubuntu Orange */
+  box-shadow: 0 0 0 2px #E95420; /* The outer accent ring */
+}
+
+/* Hide the default GTK checkmark icon and draw the badge */
+checkbutton.theme-selector > check {
+  background-color: #E95420;
+  border-radius: 9999px;
+  color: white;
+  margin: -4px; /* Positions it as a badge on the edge */
+}

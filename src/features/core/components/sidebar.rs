@@ -1,5 +1,5 @@
 use adw::prelude::*;
-use relm4::{prelude::*, Component, ComponentParts};
+use relm4::{Component, ComponentParts, prelude::*};
 
 #[derive(Debug)]
 pub enum NavigationPage {
@@ -84,34 +84,34 @@ impl Component for SideBar {
 
                             add_child:(&{
                                 let container = gtk::Box::builder()
-                                    .orientation(gtk::Orientation::Horizontal)
-                                    .spacing(12)
-                                    .halign(gtk::Align::Center)
-                                    .width_request(200)  // Force a width
-        .height_request(60)
-                                    .build();
+        .orientation(gtk::Orientation::Horizontal)
+        .halign(gtk::Align::Center)
+        .spacing(12)
+        .build();
 
-                                let create_theme_btn = |style_class: &str| {
-                                    let btn = gtk::CheckButton::builder().build();
-                                    // Add the classes from the XML
-                                    btn.add_css_class("theme-selector");
-                                    btn.add_css_class(style_class);
-                                    btn
-                                };
+    // The CSS expects the parent box to have this class
+    container.add_css_class("themeselector");
 
-                                let follow = create_theme_btn("follow");
-                                let light = create_theme_btn("light");
-                                let dark = create_theme_btn("dark");
+    let create_theme_btn = |style_class: &str| {
+        let btn = gtk::CheckButton::builder().build();
+        // These classes match your CSS selectors exactly
+        btn.add_css_class("theme-selector");
+        btn.add_css_class(style_class);
+        btn
+    };
 
-                                // Grouping is in the XML as 'group="light"'
-                                follow.set_group(Some(&light));
-                                dark.set_group(Some(&light));
+    let follow = create_theme_btn("follow");
+    let light = create_theme_btn("light");
+    let dark = create_theme_btn("dark");
 
-                                container.append(&follow);
-                                container.append(&light);
-                                container.append(&dark);
+    follow.set_group(Some(&light));
+    dark.set_group(Some(&light));
 
-                                container
+    container.append(&follow);
+    container.append(&light);
+    container.append(&dark);
+
+    container
                             }, "theme_selector")
                         }
                     },

@@ -49,7 +49,7 @@ impl Component for StudyPage {
                     #[wrap(Some)]
                     set_child = &adw::ToolbarView {
                         #[name="header"]
-                        add_top_bar = &adw::HeaderBar {
+                       add_top_bar = &adw::HeaderBar {
                             #[watch]
                             set_css_classes: &[format!("preview-area-{}", (model.config.read().unwrap().theme())).as_str()],
 
@@ -59,6 +59,37 @@ impl Component for StudyPage {
                                 set_active: model.is_sidebar_visible,
                                 connect_clicked[sender] => move |_| {
                                     let _ = sender.output(StudyPageOutPut::ToggleSidebar);
+                                }
+                            },
+
+                            #[wrap(Some)]
+                            set_title_widget = &gtk::Box{
+                                set_tooltip_text: Some("Search"),
+                                add_css_class: "linked",
+                                set_halign: gtk::Align::Center,
+
+
+                                gtk::MenuButton {
+                                    #[wrap(Some)]
+                                    set_child = &gtk::Box {
+                                        set_halign: gtk::Align::Center,
+                                        set_valign: gtk::Align::Center,
+                                        set_width_request: 280,
+                                        set_spacing: 8, 
+                                        
+                                        set_hexpand: true,
+
+                                        gtk::Image {
+                                            set_icon_name: Some("system-search-symbolic"),
+                                        },
+
+                                        #[name = "version_label"]
+                                        gtk::Label {
+                                            set_label: "Search",
+                                            add_css_class: "dim-label",
+                                        },
+                                    },
+                                    add_css_class: "search-button", 
                                 }
                             }
                         },

@@ -30,6 +30,7 @@ ego-tree = "0.10.0"
 relm4-icons = "0.10.1"
 glib = "0.21.5"
 isolang = "2.4.0"
+html2pango = "0.6.0"
 
 
 [build-dependencies]

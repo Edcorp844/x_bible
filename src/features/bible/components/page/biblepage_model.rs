@@ -68,6 +68,7 @@ impl Component for BiblePage {
             #[wrap(Some)]
             set_child = &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
+                set_margin_top: 20,
 
                 #[name="page_overlay"]
                 gtk::Overlay {

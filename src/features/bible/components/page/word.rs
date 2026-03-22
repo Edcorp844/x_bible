@@ -70,6 +70,13 @@ impl SimpleComponent for WordModel {
                     "background-color: alpha({}, 0.8); border-radius: 10px;",
                     model.annotation.color.as_deref().unwrap_or("transparent"),
                 ),
+                
+                add_controller = gtk::GestureClick {
+                            set_button: 1,
+                            connect_released[sender] => move |_, _, _, _| {
+                                sender.input(WordModelInput::LookUp)
+                            }
+                        }
                 },
             },
 
@@ -99,12 +106,7 @@ impl SimpleComponent for WordModel {
                         #[watch]
                         set_markup: &model.get_strongs_markup(),
 
-                        add_controller = gtk::GestureClick {
-                            set_button: 1,
-                            connect_released[sender] => move |_, _, _, _| {
-                                sender.input(WordModelInput::LookUp)
-                            }
-                        }
+                        
                     }
                 },
 
@@ -199,7 +201,7 @@ impl WordModel {
         let mut content = escaped.to_string();
 
         if self.data.is_red && self.config.read().unwrap().christ_words_red() {
-            content = format!("<span color='#e01b24'>{}</span>", content);
+            content = format!("<span color='#ef222c'>{}</span>", content);
         }
 
         if self.data.is_italic {

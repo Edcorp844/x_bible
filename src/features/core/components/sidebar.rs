@@ -81,37 +81,34 @@ impl Component for SideBar {
                             menu
                         })) {
                             // 4. THE ACTUAL CIRCLES: Add the widget and link it to the "appearance" ID
-
                             add_child:(&{
                                 let container = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .halign(gtk::Align::Center)
-        .spacing(12)
-        .build();
+                                    .orientation(gtk::Orientation::Horizontal)
+                                    .halign(gtk::Align::Center)
+                                    .spacing(12)
+                                    .build();
 
-    // The CSS expects the parent box to have this class
-    container.add_css_class("themeselector");
+                                container.add_css_class("themeselector");
 
-    let create_theme_btn = |style_class: &str| {
-        let btn = gtk::CheckButton::builder().build();
-        // These classes match your CSS selectors exactly
-        btn.add_css_class("theme-selector");
-        btn.add_css_class(style_class);
-        btn
-    };
+                                let create_theme_btn = |style_class: &str| {
+                                    let btn = gtk::CheckButton::builder().build();
+                                    btn.add_css_class("theme-selector");
+                                    btn.add_css_class(style_class);
+                                    btn
+                                };
 
-    let follow = create_theme_btn("follow");
-    let light = create_theme_btn("light");
-    let dark = create_theme_btn("dark");
+                                let follow = create_theme_btn("follow");
+                                let light = create_theme_btn("light");
+                                let dark = create_theme_btn("dark");
 
-    follow.set_group(Some(&light));
-    dark.set_group(Some(&light));
+                                follow.set_group(Some(&light));
+                                dark.set_group(Some(&light));
 
-    container.append(&follow);
-    container.append(&light);
-    container.append(&dark);
+                                container.append(&follow);
+                                container.append(&light);
+                                container.append(&dark);
 
-    container
+                                container
                             }, "theme_selector")
                         }
                     },
@@ -181,23 +178,6 @@ impl Component for SideBar {
         let model = SideBar {};
 
         let widgets = view_output!();
-
-        // Inside your Component's init function
-        let main_menu = gtk::gio::Menu::new();
-
-        // 1. Top Section
-        main_menu.append(Some("Refresh Modules"), Some("app.refresh"));
-        main_menu.append(Some("Store"), Some("app.open_store"));
-
-        // 2. The Last Section (Preferences, Shortcuts, Help, About)
-        let last_section = gtk::gio::Menu::new();
-        last_section.append(Some("Preferences"), Some("app.preferences"));
-        last_section.append(Some("Keyboard Shortcuts"), Some("app.shortcuts"));
-        last_section.append(Some("Help"), Some("app.help"));
-        last_section.append(Some("About xBible"), Some("app.about"));
-
-        // Append as a section to create the visual horizontal divider
-        main_menu.append_section(None, &last_section);
 
         Self::setup_collapsible_section(
             &widgets.library_header,

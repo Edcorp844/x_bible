@@ -37,7 +37,7 @@ impl Component for ModuleSection {
             gtk::Box{
                 set_orientation: gtk::Orientation::Vertical,
                 set_spacing: 12,
-                set_margin_all: 12,
+                set_margin_bottom: 12,
                 set_halign: gtk::Align::Start,
 
                 gtk::Box {

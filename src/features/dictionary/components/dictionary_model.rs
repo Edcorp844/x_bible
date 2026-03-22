@@ -126,6 +126,7 @@ impl Component for DictionaryPage {
                     let empty_label = gtk::Label::builder()
                         .label("No definitions found in installed modules.")
                         .css_classes(vec!["dim-label"])
+                        .wrap(true)
                         .xalign(0.0)
                         .margin_top(20)
                         .build();
@@ -143,7 +144,8 @@ impl Component for DictionaryPage {
 
                     // Module Name Heading (e.g., "Webster 1828")
                     let source_heading = gtk::Label::builder()
-                        .label(&format!("Source: {}", result.module_name))
+                        .label(&result.module_name)
+                        .wrap(true)
                         .xalign(0.0)
                         .css_classes(vec!["title-4", "accent"])
                         .build();
@@ -154,6 +156,7 @@ impl Component for DictionaryPage {
                         .use_markup(true)
                         .wrap(true)
                         .selectable(true)
+                        //.links(true)
                         .xalign(0.0)
                         .justify(gtk::Justification::Left)
                         .build();

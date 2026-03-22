@@ -214,7 +214,7 @@ popover .book-tile {
     padding: 1px;
     background-clip: content-box;
     border-radius: 9999px;
-    box-shadow: inset 0 0 0 1px @borders;
+    box-shadow: inset 0 0 0 1px var(--border-color);
 }
 
 

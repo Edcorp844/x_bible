@@ -44,8 +44,6 @@ impl Component for SideBar {
                         add_css_class: "flat",
                     },
 
-
-
                     pack_end = &gtk::MenuButton {
                         set_icon_name: "view-more-horizontal-symbolic",
                         set_tooltip_text: Some("Main Menu"),
@@ -86,7 +84,7 @@ impl Component for SideBar {
                             menu.append_section(None, &section);
 
                             let quit_window_section = gtk::gio::Menu::new();
-                            let quit_window_item = gtk::gio::MenuItem::new(Some("Quit"), Some("app.new_window"));
+                            let quit_window_item = gtk::gio::MenuItem::new(Some("Quit"), Some("app.quit"));
                             quit_window_item.set_attribute_value("accel", Some(&"<Primary>Q".to_variant()));
                             quit_window_section.append_item(&quit_window_item);
                             menu.append_section(None, &quit_window_section);
@@ -361,6 +359,4 @@ impl SideBar {
         });
         header.add_controller(gesture);
     }
-
-   
 }

@@ -701,6 +701,7 @@ impl Component for BiblePage {
                 let book_name = self.engine.get_book_name(&self.module.name, index);
                 sender.input(StudyInput::LoadReference(format!("{} 1", book_name)));
             }
+
             StudyInput::SetChapter(chapter) => {
                 self.current_chapter = chapter;
                 widgets
@@ -714,6 +715,7 @@ impl Component for BiblePage {
                     book_name, chapter
                 )));
             }
+
             StudyInput::OpenCustomizethemePopup => {
                 let controller = CustomizeThemePopup::builder()
                     .launch((self.config.clone(), self.engine.clone()))
@@ -721,9 +723,18 @@ impl Component for BiblePage {
                         CustomizeThemeOutput::Close => StudyInput::CloseCustomizethemePopup,
                         CustomizeThemeOutput::SaveConfig(config) => StudyInput::SetConfig(config),
                     });
-                controller.widget().present();
+                let popup_window = controller.widget();
+
+                if let Some(root_window) = relm4::main_application().active_window() {
+                    popup_window.set_transient_for(Some(&root_window));
+                }
+                popup_window.set_modal(true);
+                popup_window.set_startup_id("com.example.xbible");
+                popup_window.present();
+
                 self.customize_theme_popup = Some(controller);
             }
+
             StudyInput::CloseCustomizethemePopup => {
                 if let Some(c) = self.customize_theme_popup.take() {
                     c.widget().close();
@@ -787,7 +798,7 @@ impl BiblePage {
 
             // --- The Grid (Using WrapBox with constant width logic) ---
             let wrap_box = adw::WrapBox::builder()
-            .orientation(gtk::Orientation::Horizontal)
+                .orientation(gtk::Orientation::Horizontal)
                 .line_spacing(5) // Space between columns
                 .child_spacing(5) // Space between rows
                 .margin_start(10)

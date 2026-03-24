@@ -1,3 +1,4 @@
+pub mod app_menu;
 mod app_settings;
 pub mod components;
 pub mod display_configurations;

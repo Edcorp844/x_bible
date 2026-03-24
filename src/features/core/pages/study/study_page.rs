@@ -3,19 +3,15 @@ use relm4::prelude::*;
 use std::sync::{Arc, RwLock};
 
 use crate::features::{
-    bible::components::page::{
-        biblepage_model::{BiblePage, StudyPageOutput},
-        helpers::PageDisplayConfig,
-    },
+    bible::components::page::helpers::PageDisplayConfig,
     core::{
         display_configurations::Config::TextConfig,
-        module_engine::{sword_engine::SwordEngine, sword_engine_dictionary_ext::DictionaryQuery},
+        module_engine::sword_engine::SwordEngine,
         pages::study::{
-            bible_page_component::biblepage_root::BiblePageRoot,
+            bible_page_component::biblepage_root::{BiblePageRoot, BiblePageRootOutput},
             bible_search::search_page::SearchPage,
         },
     },
-    dictionary::components::dictionary_model::{DictionaryInputMessage, DictionaryPage},
 };
 
 pub struct StudyPage {
@@ -127,7 +123,12 @@ impl Component for StudyPage {
     ) -> ComponentParts<Self> {
         let (engine, is_sidebar_visible) = init;
 
-        let bible_page = BiblePageRoot::builder().launch(engine.clone()).detach();
+        let bible_page = BiblePageRoot::builder().launch(engine.clone()).forward(
+            sender.input_sender(),
+            move |message| match message {
+                BiblePageRootOutput::UpdateTheme => StudyPageInput::UpdateTheme,
+            },
+        );
 
         let search_page = SearchPage::builder().launch(engine.clone()).detach();
 

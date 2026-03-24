@@ -55,11 +55,18 @@ impl Component for SideBar {
                         set_popover = &gtk::PopoverMenu::from_model(Some(&{
                             let menu = gtk::gio::Menu::new();
 
+                            let appearence_section = gtk::gio::Menu::new();
+
                             let appearance_item = gtk::gio::MenuItem::new(None, None);
                             appearance_item.set_attribute_value("custom", Some(&"theme_selector".to_variant()));
-                            menu.append_item(&appearance_item);
+                            appearence_section.append_item(&appearance_item);
+                            menu.append_section(None, &appearence_section);
 
-                            menu.append(Some("New Window"), Some("app.new_window"));
+                            let window_section = gtk::gio::Menu::new();
+                            let new_window_item = gtk::gio::MenuItem::new(Some("New Window"), Some("app.new_window"));
+                            new_window_item.set_attribute_value("accel", Some(&"<Primary>N".to_variant()));
+                            window_section.append_item(&new_window_item);
+                            menu.append_section(None, &window_section);
 
                             let section = gtk::gio::Menu::new();
 
@@ -74,10 +81,16 @@ impl Component for SideBar {
                             let help_item = gtk::gio::MenuItem::new(Some("Help"), Some("app.help"));
                             help_item.set_attribute_value("accel", Some(&"F1".to_variant()));
                             section.append_item(&help_item);
-
                             section.append(Some("About xBible"), Some("app.about"));
 
                             menu.append_section(None, &section);
+
+                            let quit_window_section = gtk::gio::Menu::new();
+                            let quit_window_item = gtk::gio::MenuItem::new(Some("Quit"), Some("app.new_window"));
+                            quit_window_item.set_attribute_value("accel", Some(&"<Primary>Q".to_variant()));
+                            quit_window_section.append_item(&quit_window_item);
+                            menu.append_section(None, &quit_window_section);
+
                             menu
                         })) {
                             // 4. THE ACTUAL CIRCLES: Add the widget and link it to the "appearance" ID
@@ -348,4 +361,6 @@ impl SideBar {
         });
         header.add_controller(gesture);
     }
+
+   
 }

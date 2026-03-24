@@ -10,21 +10,26 @@ use crate::features::{
     core::{
         display_configurations::Config::TextConfig,
         module_engine::{sword_engine::SwordEngine, sword_engine_dictionary_ext::DictionaryQuery},
+        pages::study::{
+            bible_page_component::biblepage_root::BiblePageRoot,
+            bible_search::search_page::SearchPage,
+        },
     },
     dictionary::components::dictionary_model::{DictionaryInputMessage, DictionaryPage},
 };
 
 pub struct StudyPage {
     is_sidebar_visible: bool,
-    bible_page: Controller<BiblePage>,
-    dictionary_page: Controller<DictionaryPage>,
+    bible_page: Controller<BiblePageRoot>,
+    search_page: Controller<SearchPage>,
     config: TextConfig,
+    show_search: bool,
 }
 
 #[derive(Debug)]
 pub enum StudyPageInput {
-    LookupSelectedStrong(DictionaryQuery),
     UpdateTheme,
+    ToggleSearch,
 }
 
 #[derive(Debug)]
@@ -69,14 +74,14 @@ impl Component for StudyPage {
                                 set_halign: gtk::Align::Center,
 
 
-                                gtk::MenuButton {
+                                gtk::Button {
                                     #[wrap(Some)]
                                     set_child = &gtk::Box {
                                         set_halign: gtk::Align::Center,
                                         set_valign: gtk::Align::Center,
                                         set_width_request: 280,
-                                        set_spacing: 8, 
-                                        
+                                        set_spacing: 8,
+
                                         set_hexpand: true,
 
                                         gtk::Image {
@@ -89,59 +94,25 @@ impl Component for StudyPage {
                                             add_css_class: "dim-label",
                                         },
                                     },
-                                    add_css_class: "search-button", 
+                                    add_css_class: "search-button",
+
+                                    connect_clicked => move |_| {
+                                        sender.input(StudyPageInput::ToggleSearch);
+                                    }
                                 }
                             }
                         },
 
                         #[name = "main_split"]
                         #[wrap(Some)]
-                        set_content = &gtk::Paned{
-                            set_orientation: gtk::Orientation::Horizontal,
-                            set_wide_handle: true,
-                            set_shrink_start_child: true,
+                        set_content = &gtk::Stack {
+                            set_transition_type: gtk::StackTransitionType::Crossfade,
+
                             #[watch]
-                            set_css_classes: &[format!("preview-area-{}", (model.config.read().unwrap().theme())).as_str(),],
+                            set_visible_child_name: if model.show_search { "search" } else { "bible" },
 
-                            set_start_child=Some(model.bible_page.widget()),
-
-                            #[wrap(Some)]
-                            set_end_child = &adw::ToolbarView {
-
-                            set_margin_horizontal: 20,
-                            add_top_bar: switcher_bar = &adw::InlineViewSwitcher {
-                                #[watch]
-                                set_stack: Some(&stack),
-                                add_css_class: "round",
-
-                            },
-
-                            #[wrap(Some)]
-                            set_content: stack = &adw::ViewStack {
-                                set_vexpand: true,
-
-                                add_titled: (
-                                    model.dictionary_page.widget(),
-                                    Some("dict"),
-                                    "Dictionary"
-                                ),
-
-                                // Page 2: References
-                                add_titled: (
-                                    &gtk::Label::new(Some("Cross References")),
-                                    Some("ref"),
-                                    "References"
-                                ),
-
-                                add_titled: (
-                                    &gtk::Label::new(Some("Commentary")),
-                                    Some("Comm"),
-                                    "Commentaries"
-                                ),
-
-                            }
-                        }
-
+                            add_named: (model.bible_page.widget(), Some("bible")),
+                            add_named: (model.search_page.widget(), Some("search")),
                         }
                     }
                 }
@@ -156,23 +127,16 @@ impl Component for StudyPage {
     ) -> ComponentParts<Self> {
         let (engine, is_sidebar_visible) = init;
 
-        let bible_page = BiblePage::builder().launch(engine.clone()).forward(
-            sender.input_sender(),
-            move |msg| match msg {
-                StudyPageOutput::ChangeTheme => StudyPageInput::UpdateTheme,
-                StudyPageOutput::LookupSelectedStrong(query) => {
-                    StudyPageInput::LookupSelectedStrong(query)
-                }
-            },
-        );
+        let bible_page = BiblePageRoot::builder().launch(engine.clone()).detach();
 
-        let dictionary_page = DictionaryPage::builder().launch(engine.clone()).detach();
+        let search_page = SearchPage::builder().launch(engine.clone()).detach();
 
         let model = StudyPage {
             is_sidebar_visible,
             bible_page: bible_page,
-            dictionary_page: dictionary_page,
+            search_page: search_page,
             config: Arc::new(RwLock::new(PageDisplayConfig::new())),
+            show_search: false,
         };
 
         let widgets = view_output!();
@@ -188,6 +152,11 @@ impl Component for StudyPage {
         _root: &Self::Root,
     ) {
         match message {
+            StudyPageInput::ToggleSearch => {
+                self.show_search = !self.show_search;
+                let child_name = if self.show_search { "search" } else { "bible" };
+                widgets.main_split.set_visible_child_name(child_name);
+            }
             StudyPageInput::UpdateTheme => {
                 let theme = self.config.read().unwrap().theme();
 
@@ -209,11 +178,6 @@ impl Component for StudyPage {
                 widgets
                     .main_split
                     .add_css_class(&format!("preview-area-{}", theme));
-            }
-
-            StudyPageInput::LookupSelectedStrong(query) => {
-                self.dictionary_page
-                    .emit(DictionaryInputMessage::Lookup(query));
             }
         }
     }

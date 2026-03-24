@@ -1,6 +1,5 @@
 use crate::{features::core::module_engine::sword_engine::SwordEngine, sword_sys::*};
 use html2pango::markup_html;
-use regex::Regex;
 use std::ffi::{CStr, CString};
 
 #[derive(Debug, Clone)]

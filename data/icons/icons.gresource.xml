@@ -14,4 +14,8 @@
         <file preprocess="xml-stripblanks" alias="font-letter-symbolic.svg">font-letter.svg</file>
         <file preprocess="xml-stripblanks" alias="line-height-symbolic.svg">line-height.svg</file>
     </gresource>
+    <gresource prefix="/com/example/xbible/icons/hicolor/scalable/apps">
+        <file alias="com.example.xbible.svg">org.flame.xbible.svg</file>
+    </gresource>
 </gresources>
+

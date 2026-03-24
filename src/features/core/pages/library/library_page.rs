@@ -30,6 +30,17 @@ impl LibraryPageCategory {
             _ => Self::Bible,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Bible => format!("Bible Versions"),
+            Self::Commentary => format!("Commentaries"),
+            Self::Dictionary => format!("Dictionaries"),
+            Self::AudioBible => format!("Audio Bibles"),
+            Self::Map => format!("Maps"),
+            Self::Book => format!("General Books"),
+        }
+    }
 }
 
 pub struct LibraryPage {
@@ -62,13 +73,13 @@ impl Component for LibraryPage {
     view! {
         adw::NavigationPage {
             #[watch]
-            set_title: &format!("{:?}", model.category),
+            set_title: &model.category.to_string(),
 
             #[wrap(Some)]
             set_child = &adw::ToolbarView {
                 add_top_bar = &adw::HeaderBar {
                     #[wrap(Some)]
-                    set_title_widget = &adw::WindowTitle { set_title: "XBible Library" },
+                    set_title_widget = &adw::WindowTitle { set_title: &model.category.to_string() },
 
                     pack_start = &gtk::ToggleButton {
                         set_icon_name: "sidebar-show-symbolic",

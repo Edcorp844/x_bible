@@ -287,7 +287,7 @@ impl Component for BiblePage {
 
                                         gtk::Label{
                                             set_label: "Theme and Font",
-                                            add_css_class: "title-1",
+                                            add_css_class: "title-3",
                                             set_margin_start: 20,
                                             set_margin_end: 20,
                                             set_margin_top: 20,
@@ -296,7 +296,7 @@ impl Component for BiblePage {
 
                                         gtk::Label{
                                             set_label: "Font Size",
-                                            add_css_class: "title-5",
+                                            add_css_class: "title-4",
                                             set_margin_start: 20,
                                             set_margin_end: 20,
                                             set_xalign: 0.0,
@@ -343,7 +343,7 @@ impl Component for BiblePage {
 
                                             gtk::Label{
                                                 set_label: "Fonts",
-                                                add_css_class: "title-5",
+                                                add_css_class: "title-4",
                                                 set_xalign: 0.0,
                                             },
 
@@ -387,7 +387,7 @@ impl Component for BiblePage {
 
                                         gtk::Label{
                                             set_label: "Book Options",
-                                            add_css_class: "title-1",
+                                            add_css_class: "title-3",
                                             set_margin_start: 20,
                                             set_margin_end: 20,
                                             set_margin_top: 20,
@@ -404,7 +404,7 @@ impl Component for BiblePage {
 
                                             gtk::Label{
                                                 set_label: "Text",
-                                                add_css_class: "title-5",
+                                                add_css_class: "title-4",
                                                 set_xalign: 0.0,
                                             },
 
@@ -457,7 +457,7 @@ impl Component for BiblePage {
 
                                               gtk::Label{
                                                 set_label: "Lexicons",
-                                                add_css_class: "title-5",
+                                                add_css_class: "title-4",
                                                 set_xalign: 0.0,
                                             },
 

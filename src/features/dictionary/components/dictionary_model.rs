@@ -43,7 +43,7 @@ impl Component for DictionaryPage {
                     set_label: &model.key,
                     set_wrap: true,
                     set_xalign: 0.0,
-                    add_css_class: "title-1", // Large bold header
+                    add_css_class: "title-3", // Large bold header
                 },
 
                 gtk::Box {
@@ -147,7 +147,7 @@ impl Component for DictionaryPage {
                         .label(&result.module_name)
                         .wrap(true)
                         .xalign(0.0)
-                        .css_classes(vec!["title-4", "accent"])
+                        .css_classes(vec!["title-4", "dictionary-content-heading"])
                         .build();
 
                     // Definition Text (Supports Pango Markup)

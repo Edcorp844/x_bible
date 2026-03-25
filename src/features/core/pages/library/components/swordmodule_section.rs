@@ -36,25 +36,24 @@ impl Component for ModuleSection {
             // SECTION HEADER
             gtk::Box{
                 set_orientation: gtk::Orientation::Vertical,
-                set_spacing: 12,
-                set_margin_bottom: 12,
+                set_spacing: 10,
+                set_margin_bottom: 10,
                 set_halign: gtk::Align::Start,
 
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,
-                    set_spacing: 12,
-                    add_css_class: "apple-list-header",
+                    set_spacing: 10,
                     set_cursor_from_name: Some("pointer"),
 
                     // Content inside the header
                     gtk::Box {
-                        set_spacing: 12,
+                        set_spacing: 10,
                         set_halign: gtk::Align::Start,
 
 
                         gtk::Label {
                             set_label: &model.language_name,
-                            inline_css: "font-weight: 600; font-size: 1.1rem;",
+                            add_css_class: "title-3",
                             set_halign: gtk::Align::Start,
                         },
 
@@ -75,7 +74,6 @@ impl Component for ModuleSection {
                 gtk::Label {
                         set_label: &format!("{} {}", model.modules.len(), if model.modules.len() == 1 { "Book"} else {"Books"}),
                         add_css_class: "dim-label",
-                        inline_css: "font-weight: 500; font-size: 1.1rem;",
                         set_halign: gtk::Align::Start,
                 }
             },
@@ -88,14 +86,14 @@ impl Component for ModuleSection {
 
                 gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
-                    set_margin_horizontal: 12,
-                    set_margin_bottom: 20,
+                    set_margin_horizontal: 10,
+                    set_margin_bottom: 10,
 
                     // The FlowBox where the Factory lives
                     #[local_ref]
                     module_flowbox -> gtk::FlowBox {
                         set_selection_mode: gtk::SelectionMode::None,
-                        set_column_spacing: 20,
+                        set_column_spacing: 10,
                         set_row_spacing: 10,
                         set_valign: gtk::Align::Start,
                         set_halign: gtk::Align::Start,

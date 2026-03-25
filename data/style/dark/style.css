@@ -186,8 +186,12 @@ label {
 
 
 .key-underline {
-    background-color: var(--warning-bg-color);
+    background-color: oklab(from var(--warning-bg-color) var(--standalone-color-oklab));
     border-radius: 5px;
+}
+
+.dictionary-content-heading {
+    color: oklab(from var(--warning-bg-color) var(--standalone-color-oklab));
 }
 
 popover .chapter-tile {
@@ -200,7 +204,7 @@ popover .chapter-tile {
 popover .book-tile {
     min-width: 100px;
     margin: 2px;
-    padding: 5px,
+    padding: 5px;
 }
 
 .themeselector {
@@ -253,6 +257,10 @@ checkbutton.theme-selector radio:checked {
     color: @theme_selected_fg_color;
 }
 
-.themeselector checkbutton check { 
+.themeselector checkbutton check {
     transform: translate(27px, 14px);
+}
+
+label link {
+    color: oklab(from var(--blue-3) var(--standalone-color-oklab));
 }

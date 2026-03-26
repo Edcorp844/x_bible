@@ -1,12 +1,12 @@
 use crate::features::core::module_engine::sword_engine::SwordEngine;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Testament {
     Old,
     New,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CategorizedBook {
     pub name: String,
     pub testament: Testament,

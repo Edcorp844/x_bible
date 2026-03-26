@@ -153,54 +153,46 @@ impl SwordEngine {
 
     /// Fetches a whole chapter by traversing from a starting reference
     pub fn get_whole_chapter(&self, module: &SwordModule, reference: &str) -> Vec<Section> {
+        use rayon::prelude::*;
         use std::ffi::CString;
-        let mut sections = Vec::new();
-        let osis_engine = OsisTransilationEngine::new();
+
+        let mut raw_entries = Vec::new();
+        let module_name = CString::new(module.name.as_str()).unwrap();
+        let key_ref = CString::new(reference).unwrap();
 
         unsafe {
             let mgr_ptr = self.inner.lock().unwrap().mgr;
-            let module_name = CString::new(module.name.as_str()).unwrap();
-            let key_ref = CString::new(reference).unwrap();
-
-            self.set_global_options(
-                &[
-                    "Strong's Numbers",
-                    "Morphological Tags",
-                    "Footnotes",
-                    "Cross-references",
-                ],
-                "On",
-            );
-
             let h_mod = org_crosswire_sword_SWMgr_getModuleByName(mgr_ptr, module_name.as_ptr());
             if h_mod == 0 {
-                return sections;
+                return Vec::new();
             }
 
-            // Set start position and determine boundary
             org_crosswire_sword_SWModule_setKeyText(h_mod, key_ref.as_ptr());
+
+            // Get the boundary (e.g., "John.3")
             let initial_key = self
                 .sword_ptr_to_string(org_crosswire_sword_SWModule_getKeyText(h_mod))
                 .unwrap_or_default();
-
             let chapter_boundary = initial_key
                 .split(|c| c == ':' || c == '.')
                 .next()
                 .unwrap_or(&initial_key)
                 .to_string();
 
+            // Step 1: Rapidly collect raw strings from SWORD (Must be sequential due to C-API)
             loop {
                 let current_key = self
                     .sword_ptr_to_string(org_crosswire_sword_SWModule_getKeyText(h_mod))
                     .unwrap_or_default();
-
                 if !current_key.starts_with(&chapter_boundary) {
                     break;
                 }
 
-                let verse_sections =
-                    self.fetch_and_parse_current_entry(h_mod, module, &osis_engine);
-                sections.extend(verse_sections);
+                if let Some(raw_osis) =
+                    self.sword_ptr_to_string(org_crosswire_sword_SWModule_getRawEntry(h_mod))
+                {
+                    raw_entries.push((current_key, raw_osis));
+                }
 
                 org_crosswire_sword_SWModule_next(h_mod);
                 if org_crosswire_sword_SWModule_popError(h_mod) != 0 {
@@ -208,6 +200,16 @@ impl SwordEngine {
                 }
             }
         }
-        sections
+
+        // Step 2: Parallel Parsing (The Speed Boost)
+        // We use .into_par_iter() to spread the heavy XML parsing across all CPU cores.
+        let lang = module.language.clone();
+        raw_entries
+            .into_par_iter()
+            .flat_map(|(key, raw_osis)| {
+                let engine = OsisTransilationEngine::new();
+                engine.parse_osis_to_sections(lang.clone(), &raw_osis, Some(key))
+            })
+            .collect()
     }
 }

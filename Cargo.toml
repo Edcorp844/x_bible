@@ -31,6 +31,8 @@ relm4-icons = "0.10.1"
 glib = "0.21.5"
 isolang = "2.4.0"
 html2pango = "0.6.0"
+roxmltree = "0.21.1"
+rayon = "1.11.0"
 
 
 [build-dependencies]

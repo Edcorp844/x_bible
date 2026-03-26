@@ -184,9 +184,7 @@ impl SwordEngine {
                         name: self.ptr_to_str((*entry).name),
                         description: self.ptr_to_str((*entry).description),
                         category: self.ptr_to_str((*entry).category),
-                        language: self.from_code(
-                            self.ptr_to_str((*entry).language).as_str(),
-                        ),
+                        language: self.from_code(self.ptr_to_str((*entry).language).as_str()),
                         version: self.ptr_to_str((*entry).version),
                         delta: self.ptr_to_str((*entry).delta),
                         cipher_key: self.ptr_to_str((*entry).cipherKey),
@@ -231,9 +229,7 @@ impl SwordEngine {
                     name: self.ptr_to_str(info.name),
                     description: self.ptr_to_str(info.description),
                     category: self.ptr_to_str(info.category),
-                    language: self.from_code(
-                        self.ptr_to_str(info.language).as_str(),
-                    ),
+                    language: self.from_code(self.ptr_to_str(info.language).as_str()),
                     version: self.ptr_to_str(info.version),
                     delta: self.ptr_to_str(info.delta),
                     cipher_key: self.ptr_to_str(info.cipherKey),

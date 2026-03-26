@@ -156,9 +156,8 @@ impl Component for DictionaryPage {
                         .use_markup(true)
                         .wrap(true)
                         .selectable(true)
-                        //.links(true)
                         .xalign(0.0)
-                        .justify(gtk::Justification::Left)
+                        .justify(gtk::Justification::Fill)
                         .build();
 
                     // Add a separator for better visual parsing

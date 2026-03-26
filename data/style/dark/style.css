@@ -264,3 +264,50 @@ checkbutton.theme-selector radio:checked {
 label link {
     color: oklab(from var(--blue-3) var(--standalone-color-oklab));
 }
+
+
+.loading-line-pulse {
+    /* Base track - barely visible */
+    background-color: alpha(var(--accent-color), 0.05);
+    border-radius: 2px;
+    overflow: hidden;
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* Light Mode / Dark Mode Adaptive Gradient */
+.loading-line-pulse {
+    background-image: linear-gradient(
+        90deg,
+        transparent 0%,
+        alpha(var(--accent-color), 0.2) 20%,
+        var(--accent-color) 50%,
+        alpha(var(--accent-color), 0.2) 80%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: apple-shimmer 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* Subtle Glow for Dark Mode */
+@media (prefers-color-scheme: dark) {
+    .loading-line-pulse {
+        box-shadow: 0 0 8px alpha(var(--accent-color), 0.3);
+        background-image: linear-gradient(
+            90deg,
+            transparent 0%,
+            alpha(var(--accent-color), 0.4) 25%,
+            lighten(var(--accent-color), 10%) 50%,
+            alpha(var(--accent-color), 0.4) 75%,
+            transparent 100%
+        );
+    }
+}
+
+@keyframes apple-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}

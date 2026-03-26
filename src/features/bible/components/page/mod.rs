@@ -1,6 +1,7 @@
 pub mod bible_page_osis_transilation_engine_ext;
 pub mod biblepage_model;
 pub mod biblepage_settings;
+pub mod biblepage_widget_population_ext;
 pub mod display_config_ext;
 pub mod fonts_extention;
 pub mod helpers;

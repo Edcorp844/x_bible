@@ -22,6 +22,14 @@ pub trait DisplayConfig {
         (self.line_spacing() * scale_factor) as i32
     }
 
+    fn pango_section_spacing(&self) -> i32 {
+        (self.pango_line_spacing() as f64 * 2.0) as i32
+    }
+
+    fn pango_section_title_spacing(&self) -> i32 {
+        (self.pango_line_spacing() as f64 * 0.6) as i32
+    }
+
     // ----- GETTERS --------
 
     fn font_size(&self) -> f64;

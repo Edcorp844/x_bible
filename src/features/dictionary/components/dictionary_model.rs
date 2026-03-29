@@ -158,6 +158,7 @@ impl Component for DictionaryPage {
                         .selectable(true)
                         .xalign(0.0)
                         .justify(gtk::Justification::Left)
+                        .css_classes(vec!["document"])
                         .build();
 
                     // Add a separator for better visual parsing

@@ -51,30 +51,25 @@ impl FactoryComponent for SectionModel {
             set_spacing: 16,
             add_css_class: "section-container",
             #[watch]
-            set_margin_bottom: self.config.read().unwrap().pango_line_spacing(),
+            set_margin_bottom: self.config.read().unwrap().pango_section_spacing(),
 
             // 1. Title Container (Now a WrapBox instead of a Label)
             #[local_ref]
             title_flow -> adw::WrapBox {
                 #[watch]
                 set_visible: !self.data.title.is_empty(),
-                set_line_spacing: 6,
-                set_margin_top: self.config.read().unwrap().pango_line_spacing() + 8,
                 #[watch]
-                set_margin_bottom: self.config.read().unwrap().pango_line_spacing() + 8,
+                set_margin_bottom: self.config.read().unwrap().pango_section_title_spacing(),
                 set_hexpand: false,
                 #[watch]
                 set_direction: self.data.text_direction.to_gtk_text_direction(),
-
-                // Styling based on H1, H2, etc.
-                #[watch]
-                add_css_class:"title-3",
-
             },
 
             // 2. Verses
             #[local_ref]
             verse_box -> adw::WrapBox {
+                 #[watch]
+                set_line_spacing: self.config.read().unwrap().pango_line_spacing(),
                 set_hexpand: false,
             }
         }

@@ -153,38 +153,57 @@ impl SwordEngine {
 
     /// Fetches a whole chapter by traversing from a starting reference
     pub fn get_whole_chapter(&self, module: &SwordModule, reference: &str) -> Vec<Section> {
-        use rayon::prelude::*;
         use std::ffi::CString;
-
         let mut raw_entries = Vec::new();
-        let module_name = CString::new(module.name.as_str()).unwrap();
-        let key_ref = CString::new(reference).unwrap();
 
         unsafe {
-            let mgr_ptr = self.inner.lock().unwrap().mgr;
-            let h_mod = org_crosswire_sword_SWMgr_getModuleByName(mgr_ptr, module_name.as_ptr());
+            let inner = self.inner.lock().unwrap();
+            let h_mod = org_crosswire_sword_SWMgr_getModuleByName(
+                inner.mgr,
+                CString::new(module.name.as_str()).unwrap().as_ptr(),
+            );
+
             if h_mod == 0 {
                 return Vec::new();
             }
 
-            org_crosswire_sword_SWModule_setKeyText(h_mod, key_ref.as_ptr());
+            // 1. Position the module at the start of the requested reference
+            let c_ref = CString::new(reference).unwrap();
+            org_crosswire_sword_SWModule_setKeyText(h_mod, c_ref.as_ptr());
 
-            // Get the boundary (e.g., "John.3")
+            // 2. Determine the target Chapter and Book
+            // We get the "normalized" key from SWORD (e.g., "John 3:1")
             let initial_key = self
                 .sword_ptr_to_string(org_crosswire_sword_SWModule_getKeyText(h_mod))
                 .unwrap_or_default();
-            let chapter_boundary = initial_key
-                .split(|c| c == ':' || c == '.')
-                .next()
-                .unwrap_or(&initial_key)
-                .to_string();
 
-            // Step 1: Rapidly collect raw strings from SWORD (Must be sequential due to C-API)
+            // We split by spaces and punctuation to get "John" and "3"
+            let parts: Vec<&str> = initial_key
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            if parts.len() < 2 {
+                return Vec::new();
+            }
+            let target_book = parts[0].to_lowercase();
+            let target_chapter = parts[1];
+
+            // 3. Collect all verses that belong to this Book and Chapter
             loop {
                 let current_key = self
                     .sword_ptr_to_string(org_crosswire_sword_SWModule_getKeyText(h_mod))
                     .unwrap_or_default();
-                if !current_key.starts_with(&chapter_boundary) {
+                let current_parts: Vec<&str> = current_key
+                    .split(|c: char| !c.is_alphanumeric())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+
+                // Safety check: stop if we run out of verses or change chapters/books
+                if current_parts.len() < 2
+                    || current_parts[0].to_lowercase() != target_book
+                    || current_parts[1] != target_chapter
+                {
                     break;
                 }
 
@@ -194,22 +213,22 @@ impl SwordEngine {
                     raw_entries.push((current_key, raw_osis));
                 }
 
+                // Move to next verse
                 org_crosswire_sword_SWModule_next(h_mod);
+
+                // Check for end of module
                 if org_crosswire_sword_SWModule_popError(h_mod) != 0 {
                     break;
                 }
             }
         }
 
-        // Step 2: Parallel Parsing (The Speed Boost)
-        // We use .into_par_iter() to spread the heavy XML parsing across all CPU cores.
-        let lang = module.language.clone();
-        raw_entries
-            .into_par_iter()
-            .flat_map(|(key, raw_osis)| {
-                let engine = OsisTransilationEngine::new();
-                engine.parse_osis_to_sections(lang.clone(), &raw_osis, Some(key))
-            })
-            .collect()
+        // 4. Send the whole batch to the engine for grouping
+        if raw_entries.is_empty() {
+            return Vec::new();
+        }
+
+        let engine = OsisTransilationEngine::new();
+        engine.parse_osis_list_to_sections(module.language.clone(), raw_entries)
     }
 }

@@ -60,6 +60,7 @@ impl FactoryComponent for SectionModel {
                 set_visible: !self.data.title.is_empty(),
                 #[watch]
                 set_margin_bottom: self.config.read().unwrap().pango_section_title_spacing(),
+                set_line_spacing: self.config.read().unwrap().pango_section_title_spacing(),
                 set_hexpand: false,
                 #[watch]
                 set_direction: self.data.text_direction.to_gtk_text_direction(),

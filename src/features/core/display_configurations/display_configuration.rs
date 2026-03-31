@@ -23,7 +23,7 @@ pub trait DisplayConfig {
     }
 
     fn pango_section_spacing(&self) -> i32 {
-        (self.pango_line_spacing() as f64 * 2.0) as i32
+        (self.pango_line_spacing() as f64 * 3.0) as i32
     }
 
     fn pango_section_title_spacing(&self) -> i32 {

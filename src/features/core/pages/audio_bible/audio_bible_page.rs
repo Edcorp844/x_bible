@@ -5,8 +5,10 @@ use xbible_engine::engines::audio_engine::engine::{
     AudioEngine, AudioModuleInfo, AudioNode, PlaybackState,
 };
 
+use crate::features::core::pages::audio_bible::audio_player::HardwareAudioPlayer;
 pub struct AudioBiblePage {
     engine: Arc<AudioEngine>,
+    hardware_player: Option<HardwareAudioPlayer>, // Hardware layer backplane
     is_playing: bool,
     current_time_ms: i64,
     active_text: String,
@@ -17,7 +19,7 @@ pub struct AudioBiblePage {
     selected_node_id: Option<String>,
     is_loading: bool,
     playback_state: Option<PlaybackState>,
-    background_gradient_colors: Vec<(f64, f64, f64, f64)>, // RGBA as f64
+    background_gradient_colors: Vec<(f64, f64, f64, f64)>,
     available_modules: Vec<AudioModuleInfo>,
 }
 
@@ -56,7 +58,6 @@ impl Component for AudioBiblePage {
                 #[watch]
                 inline_css: &model.get_page_gradient_css(),
 
-
                 gtk::Paned {
                     set_orientation: gtk::Orientation::Horizontal,
                     set_wide_handle: true,
@@ -71,7 +72,6 @@ impl Component for AudioBiblePage {
                         set_margin_all: 24,
                         set_hexpand: false,
 
-                        // Dynamic Artwork Display Panel
                         gtk::Box {
                             set_halign: gtk::Align::Center,
                             set_valign: gtk::Align::Center,
@@ -82,25 +82,16 @@ impl Component for AudioBiblePage {
                             set_hexpand: false,
                             set_vexpand: false,
                             set_margin_bottom: 20,
-
                             inline_css: "background: rgba(255,255,255,0.05); border-radius: 16px; box-shadow: 0px 8px 24px rgba(0,0,0,0.3);",
-                            
 
                             gtk::Picture {
                                 set_halign: gtk::Align::Center,
                                 set_valign: gtk::Align::Center,
                                 set_hexpand: false,
                                 set_vexpand: false,
-                                set_width_request: 250,
-                                set_height_request: 250,
-                                set_overflow: gtk::Overflow::Hidden,
-                            
+                                set_can_shrink: true,
+                                set_content_fit: gtk::ContentFit::Contain,
 
-                                // Best settings for album-art style
-                               //. set_can_shrink: true,
-                                set_content_fit: gtk::ContentFit::Fill,   
-
-                                // Dynamic image generator matching track artwork fallback
                                 #[watch]
                                 set_paintable: model.selected_module.as_ref()
                                     .and_now(|m| m.artwork.image_bytes())
@@ -126,7 +117,6 @@ impl Component for AudioBiblePage {
                             }
                         },
 
-                        // Title and contributor strings
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 8,
@@ -147,7 +137,6 @@ impl Component for AudioBiblePage {
                             }
                         },
 
-                        // Timeline slider controls
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 6,
@@ -161,8 +150,9 @@ impl Component for AudioBiblePage {
                                 set_value: model.current_time_ms as f64,
 
                                 connect_value_changed[sender] => move |scale| {
-                                    // Block recursive signaling loops with threshold validation
-                                    sender.input(AudioBibleInput::Seek(scale.value() as i64));
+                                    if scale.is_focus() || scale.should_layout() {
+                                        sender.input(AudioBibleInput::Seek(scale.value() as i64));
+                                    }
                                 }
                             },
                             gtk::Box {
@@ -192,7 +182,6 @@ impl Component for AudioBiblePage {
                             }
                         },
 
-                        // Play/Pause Action Row
                         gtk::Box {
                             set_orientation: gtk::Orientation::Horizontal,
                             set_spacing: 12,
@@ -206,6 +195,7 @@ impl Component for AudioBiblePage {
                                 }
                             },
 
+                            #[name = "play_toggle_btn"]
                             gtk::Button {
                                 #[watch]
                                 set_icon_name: if model.is_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" },
@@ -311,6 +301,7 @@ impl Component for AudioBiblePage {
     ) -> ComponentParts<Self> {
         let model = Self {
             engine: init.clone(),
+            hardware_player: None,
             is_playing: false,
             current_time_ms: 0,
             active_text: String::new(),
@@ -327,7 +318,6 @@ impl Component for AudioBiblePage {
 
         let widgets = view_output!();
 
-        // MANUALLY POPULATE THE MODULE LIST ON INITIALIZATION
         for module in &model.available_modules {
             let row = adw::ActionRow::builder()
                 .title(
@@ -348,7 +338,7 @@ impl Component for AudioBiblePage {
             widgets.module_list.append(&row);
         }
 
-        // Establish background heartbeats at ~30ms intervals to synchronize playback states
+        // Establish core hardware monitoring heartbeat loops every 30ms
         let sender_clone = sender.clone();
         glib::timeout_add_local(std::time::Duration::from_millis(30), move || {
             sender_clone.input(AudioBibleInput::UpdatePlaybackState);
@@ -361,64 +351,89 @@ impl Component for AudioBiblePage {
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
             AudioBibleInput::TogglePlayback => {
-                self.engine.toggle_playback();
-                self.is_playing = !self.is_playing;
+                if let Some(ref player) = self.hardware_player {
+                    if self.is_playing {
+                        player.pause();
+                        self.is_playing = false;
+                    } else {
+                        player.play();
+                        self.is_playing = true;
+                    }
+                }
             }
             AudioBibleInput::Play => {
-                if !self.is_playing {
-                    self.engine.toggle_playback();
+                if let Some(ref player) = self.hardware_player {
+                    player.play();
                     self.is_playing = true;
                 }
             }
             AudioBibleInput::Pause => {
-                if self.is_playing {
-                    self.engine.toggle_playback();
+                if let Some(ref player) = self.hardware_player {
+                    player.pause();
                     self.is_playing = false;
                 }
             }
             AudioBibleInput::Stop => {
-                self.engine.stop();
-                self.is_playing = false;
-                self.current_time_ms = 0;
-                self.active_text = String::new();
+                if let Some(ref player) = self.hardware_player {
+                    player.stop();
+                    self.is_playing = false;
+                    self.current_time_ms = 0;
+                    self.active_text = String::new();
+                }
             }
             AudioBibleInput::SkipForward => {
-                self.engine.skip_forward();
-                self.force_synchronous_state_update();
+                if let Some(ref player) = self.hardware_player {
+                    let target_ms = (self.current_time_ms + 30000).min(
+                        self.selected_module
+                            .as_ref()
+                            .and_then(|m| m.metadata.as_ref())
+                            .map(|meta| meta.duration_ms)
+                            .unwrap_or(3600000),
+                    );
+                    player.seek_to(target_ms);
+                    self.current_time_ms = target_ms;
+                    self.force_synchronous_state_update();
+                }
             }
             AudioBibleInput::SkipBackward => {
-                self.engine.skip_backward();
-                self.force_synchronous_state_update();
+                if let Some(ref player) = self.hardware_player {
+                    let target_ms = (self.current_time_ms - 15000).max(0);
+                    player.seek_to(target_ms);
+                    self.current_time_ms = target_ms;
+                    self.force_synchronous_state_update();
+                }
             }
             AudioBibleInput::Seek(time_ms) => {
-                // Throttling protection layer to avoid feedback loops while dragging the slider
-                if (time_ms - self.current_time_ms).abs() > 400 {
-                    self.engine.seek_to_time(time_ms);
-                    self.current_time_ms = time_ms;
+                if let Some(ref player) = self.hardware_player {
+                    if (time_ms - self.current_time_ms).abs() > 400 {
+                        player.seek_to(time_ms);
+                        self.current_time_ms = time_ms;
+                    }
                 }
             }
             AudioBibleInput::SelectModule(index) => {
                 self.select_module(index);
             }
             AudioBibleInput::UpdatePlaybackState => {
-                if let Some(state) = self.engine.get_playback_state() {
-                    self.is_playing = state.is_playing;
-                    // Only update slider tracking position if not manual user scrub
-                    self.current_time_ms = state.current_time_ms;
-                    self.active_text = state.active_text.clone();
+                if let Some(ref player) = self.hardware_player {
+                    if let Some(state) = player.execute_tick_sync() {
+                        self.is_playing = state.is_playing;
+                        self.current_time_ms = state.current_time_ms;
+                        self.active_text = state.active_text.clone();
 
-                    if self.navigation_tree_root.is_none() {
-                        self.load_and_cache_navigation_tree();
+                        if self.navigation_tree_root.is_none() {
+                            self.load_and_cache_navigation_tree();
+                        }
+                        self.sync_active_chapter(state.current_time_ms);
+                        self.playback_state = Some(state);
                     }
-                    self.sync_active_chapter(state.current_time_ms);
                 }
-                self.playback_state = self.engine.get_playback_state();
             }
         }
     }
 }
 
-// Option extension utility block to map inside standard macro bindings cleanly
+// Option extension utility block
 trait OptionExt<T> {
     fn and_now<F, R>(&self, f: F) -> Option<R>
     where
@@ -463,7 +478,7 @@ impl AudioBiblePage {
             for (i, c) in self.background_gradient_colors.iter().rev().enumerate() {
                 let percentage = (i as f64 / (len - 1) as f64) * 100.0;
                 stops.push(format!(
-                    "rgba({}, {}, {}, {}) {}%",
+                    "rgba({}, {}, {}, {}) {:.1}%",
                     (c.0 * 255.0) as u8,
                     (c.1 * 255.0) as u8,
                     (c.2 * 255.0) as u8,
@@ -473,8 +488,6 @@ impl AudioBiblePage {
             }
         }
         let linear_grad = format!("linear-gradient(135deg, {})", stops.join(", "));
-
-        // Match SwiftUI's ZStack overlay: gradient + 45% black opacity on top
         format!(
             "background-image: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), {};",
             linear_grad
@@ -505,16 +518,9 @@ impl AudioBiblePage {
     }
 
     fn select_module(&mut self, index: usize) {
-        println!(
-            "[AudioBiblePage] select_module called with index: {}",
-            index
-        );
         let modules = self.get_available_modules();
-        println!("[AudioBiblePage] Found {} available modules", modules.len());
-
         if index < modules.len() {
             let module = modules[index].clone();
-            println!("[AudioBiblePage] Selected module: {}", module.file_name);
             self.selected_module = Some(module.clone());
             self.selected_module_index = Some(index);
             self.is_loading = true;
@@ -522,12 +528,7 @@ impl AudioBiblePage {
             self.flattened_chapters_cache.clear();
             self.selected_node_id = None;
 
-            // Extract artwork colors
             let extracted_colors = module.artwork.extract_colors(4);
-            println!(
-                "[AudioBiblePage] Extracted {} colors from artwork",
-                extracted_colors.len()
-            );
             if !extracted_colors.is_empty() {
                 self.background_gradient_colors = extracted_colors
                     .into_iter()
@@ -537,31 +538,29 @@ impl AudioBiblePage {
                 self.background_gradient_colors = vec![(0.1, 0.1, 0.1, 1.0)];
             }
 
-            // Load module into engine
-            println!(
-                "[AudioBiblePage] Loading audio module from path: {}",
-                module.absolute_path
-            );
+            // Route decoded streams back into hardware audio architecture
             match self.engine.load_audio_module(module.absolute_path.clone()) {
-                Ok(_bytes) => {
-                    println!("[AudioBiblePage] Successfully loaded audio module bytes");
-                    // Pre-cache tree
-                    self.load_and_cache_navigation_tree();
-                    self.force_synchronous_state_update();
-                    self.engine.toggle_playback();
-                    self.is_playing = true;
+                Ok(bytes) => {
+                    let duration = module
+                        .metadata
+                        .as_ref()
+                        .map(|m| m.duration_ms)
+                        .unwrap_or(3600000);
+                    if let Ok(player) =
+                        HardwareAudioPlayer::new(bytes, self.engine.clone(), duration)
+                    {
+                        player.play();
+                        self.hardware_player = Some(player);
+                        self.is_playing = true;
+                        self.load_and_cache_navigation_tree();
+                        self.force_synchronous_state_update();
+                    }
                 }
                 Err(e) => {
                     println!("[AudioBiblePage] ERROR loading audio module: {:?}", e);
                 }
             }
             self.is_loading = false;
-        } else {
-            println!(
-                "[AudioBiblePage] ERROR: Index {} is out of bounds for {} modules",
-                index,
-                modules.len()
-            );
         }
     }
 
@@ -602,6 +601,4 @@ impl AudioBiblePage {
             self.sync_active_chapter(state.current_time_ms);
         }
     }
-
-    fn make_background_gradient_colors(&mut self) {}
 }

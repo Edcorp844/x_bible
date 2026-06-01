@@ -22,6 +22,7 @@ isolang = "2.4.0"
 html2pango = "0.6.0"
 regex = "1.12.3"
 xbible_engine = { git = "https://github.com/Edcorp844/xbible_engine.git", version = "0.1.0" }
+rodio = "0.22.2"
 
 
 [build-dependencies]

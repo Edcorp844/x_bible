@@ -77,24 +77,32 @@ impl Component for AudioBiblePage {
                         set_width_request: 320,
 
                         // Rigid Rigid Container for Album Art (Guards structural expansion)
+                        // 1. STRICTOR FIXED OUTER BOX CONTAINER
                         gtk::Box {
                             set_halign: gtk::Align::Center,
                             set_valign: gtk::Align::Center,
-                            add_css_class: "rounded-container",
-                            set_width_request: 260,
-                            set_height_request: 260,
+                            add_css_class: "artwork-container",
                             set_overflow: gtk::Overflow::Hidden,
                             set_hexpand: false,
                             set_vexpand: false,
+
+                            // Rigid layout anchors on the container
+                            set_width_request: 260,
+                            set_height_request: 260,
                             inline_css: "background: rgba(255,255,255,0.06); border-radius: 20px; box-shadow: 0px 12px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);",
 
+                            // 2. THE PICTURE (Updates live, but accepts container clamping)
                             gtk::Picture {
-                                set_halign: gtk::Align::Center,
-                                set_valign: gtk::Align::Center,
+                                set_halign: gtk::Align::Fill,
+                                set_valign: gtk::Align::Fill,
                                 set_hexpand: false,
                                 set_vexpand: false,
+
+                                // Crucial pair: allows shrinking and scales down high-res bytes natively
                                 set_can_shrink: true,
-                                set_content_fit: gtk::ContentFit::Contain,
+                                set_content_fit: gtk::ContentFit::ScaleDown,
+
+                                // Rigid constraints directly on the child widget
                                 set_width_request: 260,
                                 set_height_request: 260,
 
@@ -122,7 +130,6 @@ impl Component for AudioBiblePage {
                                 },
                             }
                         },
-
                         // Metadata Details (Single-Line Truncation Rule)
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,

@@ -1,7 +1,9 @@
-use std::sync::Arc;
 use adw::prelude::*;
 use relm4::{Component, ComponentParts, ComponentSender, prelude::*};
-use xbible_engine::engines::audio_engine::engine::{AudioEngine, AudioModuleInfo, AudioNode, PlaybackState};
+use std::sync::Arc;
+use xbible_engine::engines::audio_engine::engine::{
+    AudioEngine, AudioModuleInfo, AudioNode, PlaybackState,
+};
 
 pub struct AudioBiblePage {
     engine: Arc<AudioEngine>,
@@ -50,7 +52,11 @@ impl Component for AudioBiblePage {
                 set_hexpand: true,
                 set_vexpand: true,
                 gtk::HeaderBar {},
-                
+
+                #[watch]
+                inline_css: &model.get_page_gradient_css(),
+
+
                 gtk::Paned {
                     set_orientation: gtk::Orientation::Horizontal,
                     set_wide_handle: true,
@@ -64,7 +70,6 @@ impl Component for AudioBiblePage {
                         set_spacing: 20,
                         set_margin_all: 24,
                         set_hexpand: false,
-                        set_width_request: 320,
 
                         // Dynamic Artwork Display Panel
                         gtk::Box {
@@ -73,33 +78,51 @@ impl Component for AudioBiblePage {
                             add_css_class: "rounded-container",
                             set_width_request: 250,
                             set_height_request: 250,
+                            set_overflow: gtk::Overflow::Hidden,
+                            set_hexpand: false,
+                            set_vexpand: false,
                             set_margin_bottom: 20,
-                            
-                            #[watch]
-                            inline_css: &format!("background: {}; border-radius: 16px; box-shadow: 0px 8px 24px rgba(0,0,0,0.3);", model.get_gradient_css()),
 
-                            gtk::Image {
+                            inline_css: "background: rgba(255,255,255,0.05); border-radius: 16px; box-shadow: 0px 8px 24px rgba(0,0,0,0.3);",
+                            
+
+                            gtk::Picture {
                                 set_halign: gtk::Align::Center,
                                 set_valign: gtk::Align::Center,
-                                set_hexpand: true,
-                                set_vexpand: true,
-                                
+                                set_hexpand: false,
+                                set_vexpand: false,
+                                set_width_request: 250,
+                                set_height_request: 250,
+                                set_overflow: gtk::Overflow::Hidden,
+                            
+
+                                // Best settings for album-art style
+                               //. set_can_shrink: true,
+                                set_content_fit: gtk::ContentFit::Fill,   
+
                                 // Dynamic image generator matching track artwork fallback
                                 #[watch]
                                 set_paintable: model.selected_module.as_ref()
                                     .and_now(|m| m.artwork.image_bytes())
                                     .and_then(|bytes| {
-                                        gtk::gdk::Texture::from_bytes(&gtk::glib::Bytes::from(&bytes)).ok()
+                                        let stream = gtk::gio::MemoryInputStream::from_bytes(&gtk::glib::Bytes::from(&bytes));
+                                        match gtk::gdk_pixbuf::Pixbuf::from_stream(&stream, gtk::gio::Cancellable::NONE) {
+                                            Ok(pixbuf) => Some(gtk::gdk::Texture::for_pixbuf(&pixbuf)),
+                                            Err(e) => {
+                                                println!("[AudioBiblePage] ERROR: Failed to decode artwork bytes into Pixbuf: {}", e);
+                                                None
+                                            }
+                                        }
                                     })
                                     .map(|tex| tex.upcast::<gtk::gdk::Paintable>())
                                     .as_ref(),
 
                                 #[watch]
-                                set_icon_name: if model.selected_module.is_none() { Some("audio-input-microphone-symbolic") } else { None },
-                                #[watch]
-                                set_pixel_size: if model.selected_module.is_none() { 120 } else { -1 },
-                                #[watch]
-                                set_opacity: if model.selected_module.is_none() { 0.3 } else { 1.0 },
+                                set_resource: if model.selected_module.is_none() {
+                                    Some("/org/gtk/libgtk/icons/48x48/status/audio-input-microphone-symbolic.symbolic.png")
+                                } else {
+                                    None
+                                },
                             }
                         },
 
@@ -107,7 +130,7 @@ impl Component for AudioBiblePage {
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 8,
-                            
+
                             gtk::Label {
                                 #[watch]
                                 set_label: &model.get_current_module_title(),
@@ -128,7 +151,7 @@ impl Component for AudioBiblePage {
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 6,
-                            
+
                             gtk::Scale {
                                 set_draw_value: false,
                                 set_hexpand: true,
@@ -136,7 +159,7 @@ impl Component for AudioBiblePage {
                                 set_range: (0.0, model.selected_module.as_ref().and_then(|m| m.metadata.as_ref()).map(|meta| meta.duration_ms as f64).unwrap_or(3600000.0)),
                                 #[watch]
                                 set_value: model.current_time_ms as f64,
-                                
+
                                 connect_value_changed[sender] => move |scale| {
                                     // Block recursive signaling loops with threshold validation
                                     sender.input(AudioBibleInput::Seek(scale.value() as i64));
@@ -145,7 +168,7 @@ impl Component for AudioBiblePage {
                             gtk::Box {
                                 set_orientation: gtk::Orientation::Horizontal,
                                 set_spacing: 12,
-                                
+
                                 gtk::Label {
                                     #[watch]
                                     set_label: &Self::format_time_ms(model.current_time_ms),
@@ -222,7 +245,7 @@ impl Component for AudioBiblePage {
                         gtk::ScrolledWindow {
                             set_vexpand: true,
                             set_hscrollbar_policy: gtk::PolicyType::Never,
-                            
+
                             #[name = "module_list"]
                             gtk::ListBox {
                                 set_selection_mode: gtk::SelectionMode::Single,
@@ -264,7 +287,7 @@ impl Component for AudioBiblePage {
                                     set_orientation: gtk::Orientation::Vertical,
                                     set_spacing: 16,
                                     set_margin_all: 12,
-                                    
+
                                     gtk::Label {
                                         #[watch]
                                         set_label: if model.active_text.is_empty() { "No active text streaming available." } else { &model.active_text },
@@ -308,14 +331,18 @@ impl Component for AudioBiblePage {
         for module in &model.available_modules {
             let row = adw::ActionRow::builder()
                 .title(
-                    module.metadata.as_ref()
-                    .map(|m| m.display_title.clone())
-                    .unwrap_or(module.file_name.clone())
+                    module
+                        .metadata
+                        .as_ref()
+                        .map(|m| m.display_title.clone())
+                        .unwrap_or(module.file_name.clone()),
                 )
                 .subtitle(
-                    module.metadata.as_ref()
-                    .map(|m| m.contributor.clone())
-                    .unwrap_or_else(|| "Audio Module Source".to_string())
+                    module
+                        .metadata
+                        .as_ref()
+                        .map(|m| m.contributor.clone())
+                        .unwrap_or_else(|| "Audio Module Source".to_string()),
                 )
                 .build();
             widgets.module_list.append(&row);
@@ -331,12 +358,7 @@ impl Component for AudioBiblePage {
         ComponentParts { model, widgets }
     }
 
-    fn update(
-        &mut self,
-        message: Self::Input,
-        _sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
             AudioBibleInput::TogglePlayback => {
                 self.engine.toggle_playback();
@@ -398,10 +420,15 @@ impl Component for AudioBiblePage {
 
 // Option extension utility block to map inside standard macro bindings cleanly
 trait OptionExt<T> {
-    fn and_now<F, R>(&self, f: F) -> Option<R> where F: FnOnce(&T) -> Option<R>;
+    fn and_now<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&T) -> Option<R>;
 }
 impl<T> OptionExt<T> for Option<T> {
-    fn and_now<F, R>(&self, f: F) -> Option<R> where F: FnOnce(&T) -> Option<R> {
+    fn and_now<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&T) -> Option<R>,
+    {
         self.as_ref().and_then(f)
     }
 }
@@ -414,25 +441,44 @@ impl AudioBiblePage {
         format!("{}:{:02}", minutes, seconds)
     }
 
-    fn get_gradient_css(&self) -> String {
+    fn get_page_gradient_css(&self) -> String {
         if self.background_gradient_colors.is_empty() {
-            return "rgba(0,0,0,1)".to_string();
+            return "background: rgba(0,0,0,1);".to_string();
         }
         let mut stops = Vec::new();
         let len = self.background_gradient_colors.len();
-        
+
         if len == 1 {
             let c = self.background_gradient_colors[0];
-            let rgba_str = format!("rgba({}, {}, {}, {})", (c.0 * 255.0) as u8, (c.1 * 255.0) as u8, (c.2 * 255.0) as u8, c.3);
+            let rgba_str = format!(
+                "rgba({}, {}, {}, {})",
+                (c.0 * 255.0) as u8,
+                (c.1 * 255.0) as u8,
+                (c.2 * 255.0) as u8,
+                c.3
+            );
             stops.push(format!("{} 0%", rgba_str));
             stops.push(format!("{} 100%", rgba_str));
         } else {
-            for (i, c) in self.background_gradient_colors.iter().enumerate() {
+            for (i, c) in self.background_gradient_colors.iter().rev().enumerate() {
                 let percentage = (i as f64 / (len - 1) as f64) * 100.0;
-                stops.push(format!("rgba({}, {}, {}, {}) {}%", (c.0 * 255.0) as u8, (c.1 * 255.0) as u8, (c.2 * 255.0) as u8, c.3, percentage));
+                stops.push(format!(
+                    "rgba({}, {}, {}, {}) {}%",
+                    (c.0 * 255.0) as u8,
+                    (c.1 * 255.0) as u8,
+                    (c.2 * 255.0) as u8,
+                    c.3,
+                    percentage
+                ));
             }
         }
-        format!("linear-gradient(135deg, {})", stops.join(", "))
+        let linear_grad = format!("linear-gradient(135deg, {})", stops.join(", "));
+
+        // Match SwiftUI's ZStack overlay: gradient + 45% black opacity on top
+        format!(
+            "background-image: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), {};",
+            linear_grad
+        )
     }
 
     fn get_current_module_title(&self) -> String {
@@ -459,10 +505,13 @@ impl AudioBiblePage {
     }
 
     fn select_module(&mut self, index: usize) {
-        println!("[AudioBiblePage] select_module called with index: {}", index);
+        println!(
+            "[AudioBiblePage] select_module called with index: {}",
+            index
+        );
         let modules = self.get_available_modules();
         println!("[AudioBiblePage] Found {} available modules", modules.len());
-        
+
         if index < modules.len() {
             let module = modules[index].clone();
             println!("[AudioBiblePage] Selected module: {}", module.file_name);
@@ -475,15 +524,24 @@ impl AudioBiblePage {
 
             // Extract artwork colors
             let extracted_colors = module.artwork.extract_colors(4);
-            println!("[AudioBiblePage] Extracted {} colors from artwork", extracted_colors.len());
+            println!(
+                "[AudioBiblePage] Extracted {} colors from artwork",
+                extracted_colors.len()
+            );
             if !extracted_colors.is_empty() {
-                self.background_gradient_colors = extracted_colors.into_iter().map(|c| (c.red, c.green, c.blue, c.alpha)).collect();
+                self.background_gradient_colors = extracted_colors
+                    .into_iter()
+                    .map(|c| (c.red, c.green, c.blue, c.alpha))
+                    .collect();
             } else {
                 self.background_gradient_colors = vec![(0.1, 0.1, 0.1, 1.0)];
             }
 
             // Load module into engine
-            println!("[AudioBiblePage] Loading audio module from path: {}", module.absolute_path);
+            println!(
+                "[AudioBiblePage] Loading audio module from path: {}",
+                module.absolute_path
+            );
             match self.engine.load_audio_module(module.absolute_path.clone()) {
                 Ok(_bytes) => {
                     println!("[AudioBiblePage] Successfully loaded audio module bytes");
@@ -499,15 +557,23 @@ impl AudioBiblePage {
             }
             self.is_loading = false;
         } else {
-            println!("[AudioBiblePage] ERROR: Index {} is out of bounds for {} modules", index, modules.len());
+            println!(
+                "[AudioBiblePage] ERROR: Index {} is out of bounds for {} modules",
+                index,
+                modules.len()
+            );
         }
     }
 
     fn load_and_cache_navigation_tree(&mut self) {
         if let Some(tree) = self.engine.get_navigation_tree() {
             self.navigation_tree_root = Some(tree.clone());
-            self.flattened_chapters_cache = tree.children.iter().flat_map(|c| c.children.clone()).collect();
-            
+            self.flattened_chapters_cache = tree
+                .children
+                .iter()
+                .flat_map(|c| c.children.clone())
+                .collect();
+
             if self.selected_node_id.is_none() {
                 if let Some(first) = self.flattened_chapters_cache.first() {
                     self.selected_node_id = Some(first.id.clone());
@@ -518,7 +584,11 @@ impl AudioBiblePage {
 
     fn sync_active_chapter(&mut self, time_ms: i64) {
         if let Some(active_id) = self.engine.find_active_node_id(time_ms) {
-            if let Some(matching) = self.flattened_chapters_cache.iter().find(|c| c.id == active_id || c.children.iter().any(|child| child.id == active_id)) {
+            if let Some(matching) = self
+                .flattened_chapters_cache
+                .iter()
+                .find(|c| c.id == active_id || c.children.iter().any(|child| child.id == active_id))
+            {
                 if self.selected_node_id.as_deref() != Some(&matching.id) {
                     self.selected_node_id = Some(matching.id.clone());
                 }
@@ -532,4 +602,6 @@ impl AudioBiblePage {
             self.sync_active_chapter(state.current_time_ms);
         }
     }
+
+    fn make_background_gradient_colors(&mut self) {}
 }

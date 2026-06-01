@@ -4,8 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
- 
-    // 4. --- COMPILE GTK RESOURCES ---
+    // 1. --- COMPILE GTK RESOURCES ---
     glib_build_tools::compile_resources(
         &["data"],
         "data/resources.gresource.xml",

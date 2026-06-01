@@ -1,12 +1,12 @@
 use adw::prelude::*;
 use relm4::prelude::*;
+use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 use std::sync::{Arc, RwLock};
 
 use crate::features::{
     bible::components::page::helpers::PageDisplayConfig,
     core::{
         display_configurations::Config::TextConfig,
-        module_engine::sword_engine::SwordEngine,
         pages::study::{
             bible_page_component::biblepage_root::{BiblePageRoot, BiblePageRootOutput},
             bible_search::search_page::SearchPage,
@@ -35,7 +35,7 @@ pub enum StudyPageOutPut {
 
 #[relm4::component(pub)]
 impl Component for StudyPage {
-    type Init = (Arc<SwordEngine>, bool);
+    type Init = (Arc<XBibleEngine>, bool);
     type Input = StudyPageInput;
     type Output = StudyPageOutPut;
     type CommandOutput = ();

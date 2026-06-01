@@ -6,11 +6,6 @@ mod app;
 mod features;
 mod utils;
 
-#[allow(non_camel_case_types, non_upper_case_globals, non_snake_case)]
-mod sword_sys {
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-}
-
 const STYLE_CSS_LIGHT: &str = include_str!("../data/style/light/style.css");
 const STYLE_CSS_DARK: &str = include_str!("../data/style/dark/style.css");
 

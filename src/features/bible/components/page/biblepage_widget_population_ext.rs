@@ -1,12 +1,9 @@
 use adw::prelude::*;
 use relm4::{ComponentSender, prelude::*};
+use xbible_engine::engines::module_engine::{module_engine_extensions::module_engine_books_and_chapter_ext::{CategorizedBook, Testament}, sword_module::{module::SwordModule, module_book::ModuleBook}};
 
-use crate::features::{
-    bible::components::page::biblepage_model::{BiblePage, BiblePageWidgets, StudyInput},
-    core::module_engine::{
-        sword_engine_books_and_chapter_ext::{CategorizedBook, Testament},
-        sword_module::SwordModule,
-    },
+use crate::features::bible::components::page::biblepage_model::{
+    BiblePage, BiblePageWidgets, StudyInput,
 };
 
 impl BiblePage {
@@ -96,7 +93,7 @@ impl BiblePage {
     pub(crate) fn populate_book_grid(
         &self,
         widgets: &BiblePageWidgets,
-        books: &[CategorizedBook],
+        books: &Vec<ModuleBook>,
         sender: ComponentSender<Self>,
     ) {
         // Instant Clear
@@ -107,7 +104,7 @@ impl BiblePage {
             widgets.nt_grid.remove(&child);
         }
 
-        let mut books_queue: std::collections::VecDeque<CategorizedBook> = books.to_vec().into();
+        let mut books_queue: std::collections::VecDeque<ModuleBook> = books.to_vec().into();
 
         let ot_grid = widgets.ot_grid.clone();
         let nt_grid = widgets.nt_grid.clone();
@@ -121,24 +118,32 @@ impl BiblePage {
             for _ in 0..8 {
                 if let Some(book) = books_queue.pop_front() {
                     let btn = Self::create_book_tile(&book.name);
-                    let idx = book.index;
                     let s_inner = s.clone();
                     let p_inner = pop.clone();
+                    let book_for_click = book.clone();
 
                     btn.connect_clicked(move |_| {
-                        s_inner.input(StudyInput::SetBook(idx));
+                        s_inner.input(StudyInput::SetBook(book_for_click.clone()));
                         p_inner.popdown();
                     });
 
-                    match book.testament {
-                        Testament::Old => {
-                            ot_grid.append(&btn);
-                            ot_cont.set_visible(true);
-                        }
-                        Testament::New => {
-                            nt_grid.append(&btn);
-                            nt_cont.set_visible(true);
-                        }
+                    // Determine if book is OT or NT
+                    // Common OT books (1-39 in traditional order)
+                    let ot_books = vec!["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
+                        "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings",
+                        "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalm",
+                        "Psalms", "Proverbs", "Ecclesiastes", "Isaiah", "Jeremiah", "Lamentations",
+                        "Ezekiel", "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah",
+                        "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi"];
+                    
+                    let is_ot = ot_books.iter().any(|&b| book.name.starts_with(b));
+                    
+                    if is_ot {
+                        ot_grid.append(&btn);
+                        ot_cont.set_visible(true);
+                    } else {
+                        nt_grid.append(&btn);
+                        nt_cont.set_visible(true);
                     }
                 } else {
                     return glib::ControlFlow::Break;

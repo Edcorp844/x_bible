@@ -5,27 +5,22 @@ use std::{
 
 use adw::prelude::*;
 use relm4::{Component, ComponentParts, prelude::FactoryVecDeque, prelude::*};
+use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 
 use crate::features::{
     bible::components::{
         page::{
-            helpers::AvailableFonts,
-            section::{SectionInput, SectionModel},
-            verse_components::verse::VerseInputMessage,
+            biblepage_settings::BiblePageSettings, helpers::AvailableFonts, section::{SectionInput, SectionModel}, verse_components::verse::VerseInputMessage
         },
         page_theme::theme_data::ThemePreset,
     },
-    core::{
-        display_configurations::{
+    core::display_configurations::{
             Config::TextConfig, preview_display_configuration::PreviewDisplayConfig,
         },
-        module_engine::sword_engine::SwordEngine,
-        osis_translation_engine::engine::OsisTransilationEngine,
-    },
 };
 
 pub struct CustomizeThemePopup {
-    engine: Arc<SwordEngine>,
+    engine: Arc<XBibleEngine>,
     config: TextConfig,
     preview: FactoryVecDeque<SectionModel>,
 }
@@ -46,7 +41,7 @@ pub enum CustomizeThemeOutput {
 
 #[relm4::component(pub)]
 impl Component for CustomizeThemePopup {
-    type Init = (TextConfig, Arc<SwordEngine>);
+    type Init = (TextConfig, Arc<XBibleEngine>);
     type Input = CustomizeThemeInput;
     type Output = CustomizeThemeOutput;
     type CommandOutput = ();
@@ -528,7 +523,16 @@ impl Component for CustomizeThemePopup {
 
 impl CustomizeThemePopup {
     fn setup_preview(&mut self) {
-        let preview_sections = self.engine.get_single_entry(None, "John 3:16");
+        
+        let saved_state = BiblePageSettings::load();
+        let modules = self.engine.get_bible_modules();
+
+        let active_module = if let Some(saved_name) = saved_state.last_module {
+            modules.iter().find(|m| m.name == saved_name).cloned()
+        } else {
+            modules.first().cloned()
+        };
+        let preview_sections = self.engine.get_single_entry(&active_module.unwrap(), "John 3:16");
         let mut guard = self.preview.guard();
         guard.clear();
         for section in preview_sections {

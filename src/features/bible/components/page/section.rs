@@ -1,9 +1,10 @@
+// 🌟 Fixed: Removed TextDirection from the gtk import to prevent name clashing
 use gtk::prelude::*;
 use relm4::prelude::*;
+use xbible_engine::engines::module_engine::module_engine_extensions::{module_engine_dictionary_ext::DictionaryQuery, module_engine_module_content_ext::{Section, TextDirection}};
 
 use crate::features::{
     bible::components::page::{
-        helpers::TitleStyle,
         verse_components::{
             verse::{VerseInputMessage, VerseModel, VerseOutputMessage},
             verse_annotation::{Annotations, VerseAnnotation},
@@ -12,11 +13,24 @@ use crate::features::{
     },
     core::{
         display_configurations::Config::TextConfig,
-        module_engine::{
-            sword_engine_dictionary_ext::DictionaryQuery, sword_engine_module_content_ext::Section,
-        },
     },
 };
+
+pub trait TextDirectionExt {
+    fn to_gtk_text_direction(&self) -> gtk::TextDirection;
+}
+
+// 🌟 Fixed: Bind the trait explicitly to the enum type originating from the xbible_engine crate
+impl TextDirectionExt for TextDirection {
+    fn to_gtk_text_direction(&self) -> gtk::TextDirection {
+        use TextDirection  as EngineDir;
+        
+        match *self {
+            EngineDir::Ltr => gtk::TextDirection::Ltr,
+            EngineDir::Rtl => gtk::TextDirection::Rtl,
+        }
+    }
+}
 
 pub struct SectionModel {
     pub data: Section,
@@ -53,7 +67,7 @@ impl FactoryComponent for SectionModel {
             #[watch]
             set_margin_bottom: self.config.read().unwrap().pango_section_spacing(),
 
-            // 1. Title Container (Now a WrapBox instead of a Label)
+            // 1. Title Container
             #[local_ref]
             title_flow -> adw::WrapBox {
                 #[watch]
@@ -63,7 +77,7 @@ impl FactoryComponent for SectionModel {
                 set_line_spacing: self.config.read().unwrap().pango_section_title_spacing(),
                 set_hexpand: false,
                 #[watch]
-                set_direction: self.data.text_direction.to_gtk_text_direction(),
+                set_direction: self.data.text_direction.to_gtk_text_direction(), // 🌟 Clean dot notation works perfectly now!
             },
 
             // 2. Verses

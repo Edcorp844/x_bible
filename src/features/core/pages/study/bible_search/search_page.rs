@@ -1,15 +1,16 @@
 use std::sync::Arc;
-use relm4::prelude::*;
 
-use crate::features::core::module_engine::sword_engine::SwordEngine;
+use relm4::prelude::*;
+use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
+
 
 pub struct SearchPage{
-    pub(crate) engine: Arc<SwordEngine>,
+    pub(crate) engine: Arc<XBibleEngine>,
 }
 
 #[relm4::component(pub)]
 impl Component for SearchPage {
-    type Init = Arc<SwordEngine>;
+    type Init = Arc<XBibleEngine>;
     type Input = ();
     type Output = ();
     type CommandOutput = ();

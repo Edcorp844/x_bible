@@ -1,6 +1,11 @@
 use adw::prelude::*;
 use gtk::glib::clone;
 use relm4::{WorkerController, prelude::*};
+use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery;
+use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_module_content_ext::Section;
+use xbible_engine::engines::module_engine::sword_module::module::SwordModule;
+use xbible_engine::engines::module_engine::sword_module::module_book::ModuleBook;
+use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 
@@ -15,21 +20,14 @@ use crate::features::bible::components::page::verse_components::verse::VerseInpu
 use crate::features::bible::components::page::verse_components::verse_annotation::{
     AnnotationSettings, Annotations,
 };
-use crate::features::bible::components::page::workers::biblepage_worker::{
-    BibleWorker, BibleWorkerInput, BibleWorkerOutput,
-};
+
 use crate::features::bible::components::page_theme::customize_theme_popup::{
     CustomizeThemeOutput, CustomizeThemePopup,
 };
 use crate::features::core::display_configurations::Config::TextConfig;
-use crate::features::core::module_engine::sword_engine::SwordEngine;
-use crate::features::core::module_engine::sword_engine_books_and_chapter_ext::CategorizedBook;
-use crate::features::core::module_engine::sword_engine_dictionary_ext::DictionaryQuery;
-use crate::features::core::module_engine::sword_engine_module_content_ext::Section;
-use crate::features::core::module_engine::sword_module::SwordModule;
 
 pub struct BiblePage {
-    pub(crate) engine: Arc<SwordEngine>,
+    pub(crate) engine: Arc<XBibleEngine>,
     pub(crate) module: SwordModule,
     pub(crate) sections: FactoryVecDeque<SectionModel>,
     pub(crate) config: TextConfig,
@@ -39,10 +37,9 @@ pub struct BiblePage {
     pub(crate) pending_sections: VecDeque<Section>,
     pub(crate) total_sections_to_load: usize,
 
-    pub(crate) bible_service: WorkerController<BibleWorker>,
 
     pub(crate) current_book_index: usize,
-    pub(crate) current_book: CategorizedBook,
+    pub(crate) current_book: ModuleBook,
     pub(crate) current_chapter: i32,
     pub(crate) is_loading: bool,
 }
@@ -51,12 +48,12 @@ pub struct BiblePage {
 pub enum StudyInput {
     LoadReference(String),
     SetModule(SwordModule),
-    SetBook(usize),
+    SetBook(ModuleBook),
     SetChapter(i32),
     ToggleDisplay(VerseInputMessage),
     SetConfig(TextConfig),
     ReferenceLoaded(Vec<Section>),
-    BooksLoaded(Vec<CategorizedBook>),
+    BooksLoaded(Vec<ModuleBook>),
     BookNameReady {
         name: String,
         chapter: i32,
@@ -76,7 +73,7 @@ pub enum StudyPageOutput {
 
 #[relm4::component(pub)]
 impl Component for BiblePage {
-    type Init = Arc<SwordEngine>;
+    type Init = Arc<XBibleEngine>;
     type Input = StudyInput;
     type Output = StudyPageOutput;
     type CommandOutput = ();
@@ -589,20 +586,20 @@ impl Component for BiblePage {
         // We initialize these as options to safely handle the "No Module" case
         let mut active_book = None;
         let mut active_chapter = 1;
-        let mut categorized = Vec::new();
+        let mut module_books = Vec::new();
         let mut chapter_count = 0;
 
         if let Some(ref m) = active_module {
-            categorized = engine.get_categorized_books(&m.name);
+            module_books = engine.get_books(&m.name);
 
             active_book = if let Some(saved_b) = &saved_state.last_book {
-                categorized.iter().find(|b| &b.name == saved_b).cloned()
+                module_books.iter().find(|b| &b.name == saved_b).cloned()
             } else {
-                categorized.first().cloned()
+                module_books.first().cloned()
             };
 
             if let Some(ref book) = active_book {
-                chapter_count = engine.get_chapter_count(&m.name, book.index);
+                chapter_count = book.chapters.len() as i32;
                 active_chapter = saved_state.last_chapter.unwrap_or(1);
 
                 if active_chapter > chapter_count {
@@ -620,29 +617,7 @@ impl Component for BiblePage {
 
         // 5. Initialize Model
         // Replace your model initialization with this safer version
-        let bible_service =
-            BibleWorker::builder()
-                .detach_worker(())
-                .forward(sender.input_sender(), |output| match output {
-                    // 1. Bible Text Data
-                    BibleWorkerOutput::ChapterLoaded(sections) => {
-                        StudyInput::ReferenceLoaded(sections)
-                    }
-
-                    // 2. Metadata: List of Books
-                    BibleWorkerOutput::BooksLoaded(books) => StudyInput::BooksLoaded(books),
-
-                    // 3. Metadata: Specific Book Name mapping
-                    BibleWorkerOutput::BookNameLoaded {
-                        name,
-                        chapter,
-                        chapter_count,
-                    } => StudyInput::BookNameReady {
-                        name,
-                        chapter,
-                        chapter_count,
-                    },
-                });
+        
         let model = if let (Some(m), Some(b)) = (active_module, active_book) {
             BiblePage {
                 engine,
@@ -655,7 +630,6 @@ impl Component for BiblePage {
                 customize_theme_popup: None,
                 annotations: AnnotationSettings::load_all(),
                 is_loading: false,
-                bible_service: bible_service,
                 pending_sections: VecDeque::new(),
                 total_sections_to_load: 0,
             }
@@ -669,7 +643,7 @@ impl Component for BiblePage {
 
         // 6. Populate UI Components
         Self::populate_version_grid(&widgets, &modules, sender.clone());
-        model.populate_book_grid(&widgets, &categorized, sender.clone());
+        model.populate_book_grid(&widgets, &module_books, sender.clone());
         model.populate_chapter_grid(&widgets, sender.clone(), chapter_count);
 
         // 7. Setup Overlay Animations
@@ -739,36 +713,33 @@ impl Component for BiblePage {
             // --- ASYNC METADATA FLOW (No more engine calls here) ---
             StudyInput::SetModule(module) => {
                 self.module = module;
-                self.is_loading = true; // Show spinner while worker finds books
+                self.current_chapter = 1;
+                self.is_loading = true;
                 widgets.version_label.set_label(&self.module.name);
-
-                // Ask worker for books instead of calling engine.get_categorized_books
-                self.bible_service.emit(BibleWorkerInput::GetBooks {
-                    module_name: self.module.name.clone(),
-                });
+                
+                // Load content for the selected module
+                let reference = format!("{} {}", self.current_book.name, self.current_chapter);
+                sender.input(StudyInput::LoadReference(reference));
             }
 
             StudyInput::BooksLoaded(books) => {
                 // Worker returned the list. Now populate the UI.
                 self.populate_book_grid(widgets, &books, sender.clone());
                 if let Some(first_book) = books.first() {
-                    sender.input(StudyInput::SetBook(first_book.index));
+                    sender.input(StudyInput::SetBook(first_book.clone()));
                 }
             }
 
-            StudyInput::SetBook(index) => {
-                self.current_book_index = index;
+            StudyInput::SetBook(book) => {
+                self.current_book = book.clone();
                 self.current_chapter = 1;
-
-                self.is_loading = true; // Show spinner while worker finds books
-                widgets.version_label.set_label(&self.module.name);
-
-                // Ask worker for the specific book name/metadata
-                self.bible_service.emit(BibleWorkerInput::GetBookName {
-                    module_name: self.module.name.clone(),
-                    book_index: index,
-                    chapter: 1,
-                });
+                self.is_loading = true;
+                widgets.book_label.set_label(&self.current_book.name);
+                widgets.chapter_label.set_label("Chapter 1");
+                
+                // Load content for the selected book
+                let reference = format!("{} 1", self.current_book.name);
+                sender.input(StudyInput::LoadReference(reference));
             }
 
             StudyInput::BookNameReady {
@@ -797,26 +768,22 @@ impl Component for BiblePage {
                     .chapter_label
                     .set_label(&format!("Chapter {}", chapter));
 
-                self.is_loading = true; // Show spinner while worker finds books
-                widgets.version_label.set_label(&self.module.name);
-
-                // Ask worker for name to ensure reference is correct (e.g. "John" vs "Gospel of John")
-                self.bible_service.emit(BibleWorkerInput::GetBookName {
-                    module_name: self.module.name.clone(),
-                    book_index: self.current_book_index,
-                    chapter,
-                });
+                self.is_loading = true;
+                
+                // Load content for the selected chapter
+                let reference = format!("{} {}", self.current_book.name, chapter);
+                sender.input(StudyInput::LoadReference(reference));
             }
 
             // --- BIBLE TEXT LOADING ---
-            StudyInput::LoadReference(refe) => {
+            StudyInput::LoadReference(reference) => {
                 self.is_loading = true;
                 widgets.loading.set_visible(self.is_loading);
                 self.sections.guard().clear();
-                self.bible_service.emit(BibleWorkerInput::LoadChapter {
-                    module: self.module.clone(),
-                    reference: refe,
-                });
+                
+                // Fetch sections from engine
+                let sections = self.engine.get_chapter_content(&self.module.name, &reference);
+                sender.input(StudyInput::ReferenceLoaded(sections));
             }
 
             StudyInput::ReferenceLoaded(sections) => {

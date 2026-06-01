@@ -1,10 +1,10 @@
 use adw::prelude::*;
 use relm4::{Component, ComponentController, ComponentParts, Controller, prelude::*};
+use xbible_engine::engines::{module_engine::sword_module::module::SwordModule, xbible_engine::engine::XBibleEngine};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::features::core::{
-    module_engine::{sword_engine::SwordEngine, sword_module::SwordModule},
     pages::library::components::swordmodule_section::{ModuleSection, ModuleSectionInit},
 };
 
@@ -45,7 +45,7 @@ impl LibraryPageCategory {
 
 pub struct LibraryPage {
     category: LibraryPageCategory,
-    engine: Arc<SwordEngine>,
+    engine: Arc<XBibleEngine>,
     // Store Controllers instead of a Factory
     section_controllers: Vec<Controller<ModuleSection>>,
     is_sidebar_visible: bool,
@@ -65,7 +65,7 @@ pub enum LibraryPageOutput {
 
 #[relm4::component(pub)]
 impl Component for LibraryPage {
-    type Init = (LibraryPageCategory, Arc<SwordEngine>, bool);
+    type Init = (LibraryPageCategory, Arc<XBibleEngine>, bool);
     type Input = LibraryPageInput;
     type Output = LibraryPageOutput;
     type CommandOutput = ();

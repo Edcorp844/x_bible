@@ -1,13 +1,13 @@
-use gtk::prelude::*;
-use relm4::{Component, ComponentParts, ComponentSender, prelude::*};
 use std::sync::Arc;
 
-use crate::features::core::module_engine::{
-    sword_engine::SwordEngine, sword_engine_dictionary_ext::DictionaryQuery,
-};
+use gtk::prelude::*;
+use relm4::{Component, ComponentParts, ComponentSender, prelude::*};
+use xbible_engine::engines::{module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery, xbible_engine::engine::XBibleEngine};
+use crate::features::dictionary::html_to_pango::html_to_pango_markup;
+
 
 pub struct DictionaryPage {
-    engine: Arc<SwordEngine>,
+    engine: Arc<XBibleEngine>,
     key: String,
 }
 
@@ -18,7 +18,7 @@ pub enum DictionaryInputMessage {
 
 #[relm4::component(pub)]
 impl Component for DictionaryPage {
-    type Init = Arc<SwordEngine>;
+    type Init = Arc<XBibleEngine>;
     type Input = DictionaryInputMessage;
     type Output = ();
     type CommandOutput = ();
@@ -136,7 +136,8 @@ impl Component for DictionaryPage {
 
                 // 3. Populate results with Source Heading + Definition Body
                 for result in lookup_result.results {
-                    let reuslt_body = self.engine.format_for_pango(&result.definition);
+                    // Convert HTML definition to Pango markup
+                    let pango_definition = html_to_pango_markup(&result.definition);
                     let result_box = gtk::Box::builder()
                         .orientation(gtk::Orientation::Vertical)
                         .spacing(8)
@@ -152,7 +153,7 @@ impl Component for DictionaryPage {
 
                     // Definition Text (Supports Pango Markup)
                     let definition_body = gtk::Label::builder()
-                        .label(reuslt_body)
+                        .label(&pango_definition)
                         .use_markup(true)
                         .wrap(true)
                         .selectable(true)

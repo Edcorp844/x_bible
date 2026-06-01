@@ -1,5 +1,6 @@
 use adw::prelude::*;
 use relm4::prelude::*;
+use xbible_engine::engines::module_engine::module_engine_extensions::{module_engine_dictionary_ext::DictionaryQuery, module_engine_module_content_ext::Verse};
 
 use crate::features::{
     bible::components::page::{
@@ -13,9 +14,7 @@ use crate::features::{
     },
     core::{
         display_configurations::Config::TextConfig,
-        module_engine::{
-            sword_engine_dictionary_ext::DictionaryQuery, sword_engine_module_content_ext::Verse,
-        },
+        
     },
 };
 

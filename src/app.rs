@@ -1,21 +1,20 @@
 use adw::prelude::*;
 use relm4::prelude::*;
+use ::xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 use std::fmt::Debug;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::features::core::{
     components::sidebar::{NavigationPage, SideBar, SidebarMessage},
-    module_engine::sword_engine::SwordEngine,
     pages::{
         library::library_page::{LibraryPage, LibraryPageCategory, LibraryPageOutput},
-        store::store_page::{StorePage, StorePageOutput},
         study::study_page::{StudyPage, StudyPageOutPut},
     },
 };
 
 enum PageController {
     Bible(Controller<StudyPage>),
-    Store(Controller<StorePage>),
+    Store(Controller<StudyPage>),
     Library(Controller<LibraryPage>),
 }
 
@@ -28,10 +27,15 @@ impl PageController {
         }
     }
 }
+
 pub struct AppModel {
     side_bar: Controller<SideBar>,
     pages_cache: HashMap<String, PageController>,
-    engine: Arc<SwordEngine>,
+    
+    engine: Option<Arc<XBibleEngine>>,
+    is_engine_ready: bool,
+    engine_error: Option<String>,
+    
     is_sidebar_visible: bool,
     current_page_key: String,
 }
@@ -41,6 +45,9 @@ pub enum AppInputMessage {
     ToggleSidebar,
     SetContentPage(NavigationPage),
     SetSidebarVisibility(bool),
+    
+    EngineInitializationSuccess(Arc<XBibleEngine>),
+    EngineInitializationFailed(String),
 }
 
 #[relm4::component(pub)]
@@ -75,8 +82,46 @@ impl SimpleComponent for AppModel {
 
                 #[wrap(Some)]
                 set_content = &adw::Bin {
-                    #[watch]
-                    set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
+                   #[name = "content_stack"]
+                    gtk::Stack {
+                        set_transition_type: gtk::StackTransitionType::Crossfade,
+
+                        // Persistent Sub-View 1: Loading view state wrapper
+                        add_named[Some("loading")] = &gtk::CenterBox {
+                            set_center_widget: Some(&gtk::Spinner::builder().spinning(true)
+                                .css_classes(vec![String::from("loading-spinner")])
+                                .build()),
+                        },
+
+                        // Persistent Sub-View 2: Error view state container
+                        add_named[Some("error")] = &gtk::CenterBox {
+                            #[watch]
+                            set_center_widget: model.engine_error.as_ref().map(|msg| {
+                                gtk::Label::builder()
+                                    .label(msg)
+                                    .css_classes(vec![String::from("error-state-label")])
+                                    .build()
+                                    .upcast::<gtk::Widget>()
+                            }).as_ref(),
+                        },
+
+                        // Persistent Sub-View 3: Workspace layout
+                        add_named[Some("workspace")] = &adw::Bin {
+                            // 🌟 Your exact mapping lookup logic works here completely natively!
+                            #[watch]
+                            set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
+                        },
+
+                        // Track state modifications to flip active layout index targets smoothly
+                        #[watch]
+                        set_visible_child_name: if model.engine_error.is_some() {
+                            "error"
+                        } else if !model.is_engine_ready {
+                            "loading"
+                        } else {
+                            "workspace"
+                        },
+                    }
                 },
             }
         }
@@ -87,7 +132,20 @@ impl SimpleComponent for AppModel {
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let engine = SwordEngine::new();
+        
+        let engine_sender = sender.clone();
+        std::thread::spawn(move || {
+            match std::panic::catch_unwind(|| XBibleEngine::new()) {
+                Ok(loaded_engine) => {
+                    engine_sender.input(AppInputMessage::EngineInitializationSuccess(loaded_engine));
+                }
+                Err(_) => {
+                    engine_sender.input(AppInputMessage::EngineInitializationFailed(
+                        String::from("Failed to initialize SWORD background subsystems.")
+                    ));
+                }
+            }
+        });
 
         let side_bar = SideBar::builder()
             .launch(())
@@ -96,27 +154,17 @@ impl SimpleComponent for AppModel {
                 SidebarMessage::SelectPage(page) => AppInputMessage::SetContentPage(page),
             });
 
-        let bible_page = PageController::Bible(
-            StudyPage::builder()
-                .launch((engine.clone(), false))
-                .forward(sender.input_sender(), |message| match message {
-                    StudyPageOutPut::ToggleSidebar => AppInputMessage::ToggleSidebar,
-                }),
-        );
-
-        let mut pages_cache = HashMap::new();
-        pages_cache.insert(NavigationPage::Bible.to_key(), bible_page);
-
         let model = AppModel {
             side_bar,
-            engine,
+            pages_cache: HashMap::new(), 
+            engine: None,
+            is_engine_ready: false,
+            engine_error: None,
             is_sidebar_visible: false,
-            pages_cache: pages_cache,
             current_page_key: NavigationPage::Bible.to_key(),
         };
 
         let sidebar_widget = model.side_bar.widget();
-
         let widgets = view_output!();
 
         ComponentParts { model, widgets }
@@ -132,15 +180,37 @@ impl SimpleComponent for AppModel {
                     self.is_sidebar_visible = visible;
                 }
             }
+            
+            AppInputMessage::EngineInitializationSuccess(engine_arc) => {
+                self.engine = Some(engine_arc.clone());
+                self.is_engine_ready = true;
+                
+                let bible_page = PageController::Bible(
+                    StudyPage::builder()
+                        .launch((engine_arc.clone(), self.is_sidebar_visible))
+                        .forward(sender.input_sender(), |message| match message {
+                            StudyPageOutPut::ToggleSidebar => AppInputMessage::ToggleSidebar,
+                        }),
+                );
+                self.pages_cache.insert(NavigationPage::Bible.to_key(), bible_page);
+            }
+            
+            AppInputMessage::EngineInitializationFailed(err_string) => {
+                self.engine_error = Some(err_string);
+                self.is_engine_ready = false;
+            }
+
             AppInputMessage::SetContentPage(page) => {
                 let key = page.to_key();
+
+                let Some(ref active_engine) = self.engine else { return; };
 
                 if !self.pages_cache.contains_key(&key) {
                     match page {
                         NavigationPage::Bible => {
                             let bible_page = PageController::Bible(
                                 StudyPage::builder()
-                                    .launch((self.engine.clone(), self.is_sidebar_visible.clone()))
+                                    .launch((active_engine.clone(), self.is_sidebar_visible))
                                     .forward(sender.input_sender(), |message| match message {
                                         StudyPageOutPut::ToggleSidebar => {
                                             AppInputMessage::ToggleSidebar
@@ -150,10 +220,10 @@ impl SimpleComponent for AppModel {
                             self.pages_cache.insert(key.clone(), bible_page);
                         }
                         NavigationPage::Library(category) => {
-                            let libarary_page = LibraryPage::builder()
+                            let library_page = LibraryPage::builder()
                                 .launch((
                                     LibraryPageCategory::from_label(category.as_str()),
-                                    self.engine.clone(),
+                                    active_engine.clone(),
                                     self.is_sidebar_visible,
                                 ))
                                 .forward(sender.input_sender(), |message| match message {
@@ -162,20 +232,9 @@ impl SimpleComponent for AppModel {
                                     }
                                 });
                             self.pages_cache
-                                .insert(key.clone(), PageController::Library(libarary_page));
+                                .insert(key.clone(), PageController::Library(library_page));
                         }
-                        NavigationPage::Store => {
-                            let store_page = StorePage::builder()
-                                .launch((self.engine.clone(), self.is_sidebar_visible))
-                                .forward(sender.input_sender(), |message| match message {
-                                    StorePageOutput::ToggleSidebar => {
-                                        AppInputMessage::ToggleSidebar
-                                    }
-                                });
-
-                            self.pages_cache
-                                .insert(key.clone(), PageController::Store(store_page));
-                        }
+                        NavigationPage::Store => {}
                     }
                 }
 

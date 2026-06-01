@@ -1,8 +1,8 @@
-use crate::features::core::{
-    module_engine::sword_module::SwordModule, pages::library::components::swordmodule::ModuleTile,
+use crate::features::core::{ pages::library::components::swordmodule::ModuleTile,
 };
 use adw::prelude::*;
 use relm4::prelude::*;
+use xbible_engine::engines::module_engine::sword_module::module::SwordModule;
 
 pub struct ModuleSectionInit {
     pub language_name: String,

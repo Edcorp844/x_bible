@@ -1,4 +1,5 @@
 use adw::prelude::*;
+use xbible_engine::engines::{module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery, xbible_engine::engine::XBibleEngine};
 use std::sync::{Arc, RwLock};
 
 use relm4::{Component, ComponentParts, ComponentSender, Controller, prelude::*};
@@ -10,7 +11,6 @@ use crate::features::{
     },
     core::{
         display_configurations::Config::TextConfig,
-        module_engine::{sword_engine::SwordEngine, sword_engine_dictionary_ext::DictionaryQuery},
     },
     dictionary::components::dictionary_model::{DictionaryInputMessage, DictionaryPage},
 };
@@ -33,7 +33,7 @@ pub enum BiblePageRootOutput {
 
 #[relm4::component(pub)]
 impl Component for BiblePageRoot {
-    type Init = Arc<SwordEngine>;
+    type Init = Arc<XBibleEngine>;
     type Input = BiblePageRootInput;
     type Output = BiblePageRootOutput;
     type CommandOutput = ();

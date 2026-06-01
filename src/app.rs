@@ -1,6 +1,6 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use ::xbible_engine::engines::xbible_engine::engine::XBibleEngine;
+use ::xbible_engine::engines::{xbible_engine::engine::XBibleEngine, audio_engine::engine::AudioEngine};
 use std::fmt::Debug;
 use std::{collections::HashMap, sync::Arc};
 
@@ -9,11 +9,13 @@ use crate::features::core::{
     pages::{
         library::library_page::{LibraryPage, LibraryPageCategory, LibraryPageOutput},
         study::study_page::{StudyPage, StudyPageOutPut},
+        audio_bible::audio_bible_page::AudioBiblePage,
     },
 };
 
 enum PageController {
     Bible(Controller<StudyPage>),
+    AudioBible(Controller<AudioBiblePage>),
     Store(Controller<StudyPage>),
     Library(Controller<LibraryPage>),
 }
@@ -22,6 +24,7 @@ impl PageController {
     fn widget(&self) -> &adw::NavigationPage {
         match self {
             Self::Bible(c) => c.widget(),
+            Self::AudioBible(c) => c.widget(),
             Self::Store(c) => c.widget(),
             Self::Library(c) => c.widget(),
         }
@@ -33,6 +36,7 @@ pub struct AppModel {
     pages_cache: HashMap<String, PageController>,
     
     engine: Option<Arc<XBibleEngine>>,
+    audio_engine: Arc<AudioEngine>,
     is_engine_ready: bool,
     engine_error: Option<String>,
     
@@ -158,6 +162,7 @@ impl SimpleComponent for AppModel {
             side_bar,
             pages_cache: HashMap::new(), 
             engine: None,
+            audio_engine: Arc::new(AudioEngine::new()),
             is_engine_ready: false,
             engine_error: None,
             is_sidebar_visible: false,
@@ -218,6 +223,14 @@ impl SimpleComponent for AppModel {
                                     }),
                             );
                             self.pages_cache.insert(key.clone(), bible_page);
+                        }
+                        NavigationPage::AudioBible => {
+                            let audio_page = PageController::AudioBible(
+                                AudioBiblePage::builder()
+                                    .launch(self.audio_engine.clone())
+                                    .detach(),
+                            );
+                            self.pages_cache.insert(key.clone(), audio_page);
                         }
                         NavigationPage::Library(category) => {
                             let library_page = LibraryPage::builder()

@@ -4,6 +4,7 @@ use relm4::{Component, ComponentParts, prelude::*};
 #[derive(Debug)]
 pub enum NavigationPage {
     Bible,
+    AudioBible,
     Library(String),
     Store,
 }
@@ -149,6 +150,32 @@ impl Component for SideBar {
                             }
                         },
 
+                        #[name = "tools_header"]
+                        gtk::Box {
+                            add_css_class: "sidebar-header-box",
+                            set_margin_horizontal: 20,
+                            gtk::Label {
+                                set_label: "Tools",
+                                add_css_class: "sidebar-section-title",
+                                add_css_class: "dimmed",
+                            },
+                            gtk::Separator { set_hexpand: true, add_css_class: "spacer" },
+                            #[name = "tools_chevron"]
+                            gtk::Image { set_icon_name: Some("pan-down-symbolic"), add_css_class: "dimmed" }
+                        },
+
+                        #[name = "tools_revealer"]
+                        gtk::Revealer {
+                            set_reveal_child: true,
+                            #[name = "tools_listbox"]
+                            gtk::ListBox {
+                                // Start with None to prevent auto-selection during population
+                                set_selection_mode: gtk::SelectionMode::None,
+                                set_margin_horizontal: 12,
+                                add_css_class: "navigation-sidebar"
+                            }
+                        },
+
                         #[name = "library_header"]
                         gtk::Box {
                             add_css_class: "sidebar-header-box",
@@ -227,6 +254,7 @@ impl SideBar {
         let listbox = &widgets.pages;
         let items = [
             ("bible-read-symbolic", "Study"),
+            ("audio-input-microphone-symbolic", "Audio Bible"),
             ("my-store-symbolic", "Store"),
         ];
 
@@ -269,6 +297,11 @@ impl SideBar {
                 let _ = sender_clone
                     .output_sender()
                     .send(SidebarMessage::SelectPage(NavigationPage::Bible));
+            }
+            if row.widget_name().as_str() == "Audio Bible" {
+                let _ = sender_clone
+                    .output_sender()
+                    .send(SidebarMessage::SelectPage(NavigationPage::AudioBible));
             }
             if row.widget_name().as_str() == "Store" {
                 let _ = sender_clone

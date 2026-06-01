@@ -7,4 +7,3 @@ pub mod helpers;
 pub mod section;
 pub mod verse_components;
 pub mod word;
-pub mod workers;

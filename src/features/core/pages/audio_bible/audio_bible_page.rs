@@ -5,7 +5,9 @@ use xbible_engine::engines::audio_engine::engine::{
     AudioEngine, AudioModuleInfo, AudioNode, PlaybackState,
 };
 
-use crate::features::core::pages::audio_bible::audio_player::HardwareAudioPlayer;
+use crate::features::core::pages::audio_bible::{
+    audio_player::HardwareAudioPlayer, interactive_navigation_card::InteractiveNavigationCard,
+};
 pub struct AudioBiblePage {
     engine: Arc<AudioEngine>,
     hardware_player: Option<HardwareAudioPlayer>, // Hardware layer backplane
@@ -21,6 +23,8 @@ pub struct AudioBiblePage {
     playback_state: Option<PlaybackState>,
     background_gradient_colors: Vec<(f64, f64, f64, f64)>,
     available_modules: Vec<AudioModuleInfo>,
+    is_stopped: bool,
+    view_control: ViewControl,
     is_sidebar_visible: bool,
 }
 
@@ -41,6 +45,12 @@ pub enum AudioBibleOutput {
     ToggleSidebar,
 }
 
+#[derive(Debug, Clone)]
+pub enum ViewControl {
+    Playlist,
+    Lyrics,
+}
+
 #[relm4::component(pub)]
 impl Component for AudioBiblePage {
     type Init = (Arc<AudioEngine>, bool);
@@ -49,381 +59,413 @@ impl Component for AudioBiblePage {
     type CommandOutput = ();
 
     view! {
-        #[root]
-        adw::NavigationPage {
-            set_title: "Audio Bible",
+    #[root]
+    adw::NavigationPage {
+        set_title: "Audio Bible",
 
-            #[watch]
-            inline_css: &model.get_page_gradient_css(),
+        #[watch]
+        inline_css: &model.get_page_gradient_css(),
+
+        #[wrap(Some)]
+        set_child = &adw::ToolbarView {
+            add_top_bar = &adw::HeaderBar {
+                #[wrap(Some)]
+                set_title_widget = &adw::WindowTitle { set_title: "Audio Bible" },
+                set_show_title: false,
+                add_css_class: "flat",
+                inline_css: "background: transparent; box-shadow: none;",
+
+                pack_start = &gtk::ToggleButton {
+                    set_icon_name: "sidebar-show-symbolic",
+                    #[watch]
+                    set_active: model.is_sidebar_visible,
+                    connect_clicked[sender] => move |_| {
+                        let _ = sender.output(AudioBibleOutput::ToggleSidebar);
+                    }
+                }
+            },
 
             #[wrap(Some)]
-            set_child = &adw::ToolbarView {
-                add_top_bar = &adw::HeaderBar {
-                    #[wrap(Some)]
-                    set_title_widget = &adw::WindowTitle { set_title: "Audio Bible" },
-                    set_show_title: false,
-                    add_css_class: "flat",
-                    inline_css: "background: transparent; box-shadow: none;",
-
-                    pack_start = &gtk::ToggleButton {
-                        set_icon_name: "sidebar-show-symbolic",
-                        #[watch]
-                        set_active: model.is_sidebar_visible,
-                        connect_clicked[sender] => move |_| {
-                            let _ = sender.output(AudioBibleOutput::ToggleSidebar);
-                        }
-                    }
-                },
+            set_content = &adw::Clamp {
+                set_maximum_size: 1500,
+                set_tightening_threshold: 1000,
 
                 #[wrap(Some)]
-                set_content = &adw::Clamp {
-                    set_maximum_size: 1500,
-                    set_tightening_threshold: 1000,
+                set_child = &gtk::Box {
+                    set_orientation: gtk::Orientation::Horizontal,
+                    set_valign: gtk::Align::Center,
+                    set_hexpand: false,
+                    set_vexpand: false,
+                    inline_css: "background: transparent;",
 
-                    #[wrap(Some)]
-                    set_child = &gtk::Box {
-                        set_orientation: gtk::Orientation::Horizontal,
-                        set_valign: gtk::Align::Center,
+                    // =========================================================
+                    // LEFT PANEL: SIDEBAR PANE
+                    // =========================================================
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_spacing: 24,
+                        set_margin_all: 24,
+                        set_vexpand: true,
                         set_hexpand: false,
-                        set_vexpand: false,
+
+                        // Rigid proportional width constraint enforced via standard layout methods
+                        set_width_request: 340,
                         inline_css: "background: transparent;",
 
-                        // =========================================================
-                        // LEFT PANEL: SIDEBAR PANE
-                        // =========================================================
+                        #[watch]
+                        set_visible: model.is_sidebar_visible,
+
+                        // Rigid Container for Album Art
                         gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 24,
-                            set_margin_all: 24,
-                            set_vexpand: true,
+                            set_halign: gtk::Align::Center,
+                            set_valign: gtk::Align::Center,
+                            add_css_class: "artwork-container",
+                            set_overflow: gtk::Overflow::Hidden,
                             set_hexpand: false,
+                            set_vexpand: false,
+                            set_width_request: 260,
+                            set_height_request: 260,
+                            inline_css: "background: rgba(255,255,255,0.06); border-radius: 20px; box-shadow: 0px 12px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);",
 
-                            // Rigid proportional width constraint enforced via standard layout methods
-                            set_width_request: 340,
-                            inline_css: "background: transparent;",
-
-                            #[watch]
-                            set_visible: model.is_sidebar_visible,
-
-                            // Rigid Container for Album Art
-                            gtk::Box {
-                                set_halign: gtk::Align::Center,
-                                set_valign: gtk::Align::Center,
-                                add_css_class: "artwork-container",
-                                set_overflow: gtk::Overflow::Hidden,
+                            gtk::Picture {
+                                set_halign: gtk::Align::Fill,
+                                set_valign: gtk::Align::Fill,
                                 set_hexpand: false,
                                 set_vexpand: false,
+
+                                // FORCE THE PICTURE NOT TO EXPAND BEYOND THE COORD LIMITS
+                                set_can_shrink: true,
+                                set_content_fit: gtk::ContentFit::Cover,
+
                                 set_width_request: 260,
                                 set_height_request: 260,
-                                inline_css: "background: rgba(255,255,255,0.06); border-radius: 20px; box-shadow: 0px 12px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);",
 
-                                gtk::Picture {
-                                    set_halign: gtk::Align::Fill,
-                                    set_valign: gtk::Align::Fill,
-                                    set_hexpand: false,
-                                    set_vexpand: false,
-
-                                    // FORCE THE PICTURE NOT TO EXPAND BEYOND THE COORD LIMITS
-                                    set_can_shrink: true,
-                                    set_content_fit: gtk::ContentFit::Cover,
-
-                                    set_width_request: 260,
-                                    set_height_request: 260,
-
-                                    #[watch]
-                                    set_paintable: model.selected_module.as_ref()
-                                        .and_now(|m| m.artwork.image_bytes())
-                                        .and_then(|bytes| {
-                                            let stream = gtk::gio::MemoryInputStream::from_bytes(&gtk::glib::Bytes::from(&bytes));
-                                            match gtk::gdk_pixbuf::Pixbuf::from_stream_at_scale(&stream, 260, 260, true, gtk::gio::Cancellable::NONE) {
-                                                Ok(pixbuf) => Some(gtk::gdk::Texture::for_pixbuf(&pixbuf)),
-                                                Err(e) => {
-                                                    println!("[AudioBiblePage] ERROR: Failed to decode artwork bytes: {}", e);
-                                                    None
-                                                }
+                                #[watch]
+                                set_paintable: model.selected_module.as_ref()
+                                    .and_now(|m| m.artwork.image_bytes())
+                                    .and_then(|bytes| {
+                                        let stream = gtk::gio::MemoryInputStream::from_bytes(&gtk::glib::Bytes::from(&bytes));
+                                        match gtk::gdk_pixbuf::Pixbuf::from_stream_at_scale(&stream, 260, 260, true, gtk::gio::Cancellable::NONE) {
+                                            Ok(pixbuf) => Some(gtk::gdk::Texture::for_pixbuf(&pixbuf)),
+                                            Err(e) => {
+                                                println!("[AudioBiblePage] ERROR: Failed to decode artwork bytes: {}", e);
+                                                None
                                             }
-                                        })
-                                        .map(|tex| tex.upcast::<gtk::gdk::Paintable>())
-                                        .as_ref(),
-
-                                    #[watch]
-                                    set_resource: if model.selected_module.is_none() {
-                                        Some("/org/gtk/libgtk/icons/48x48/status/audio-input-microphone-symbolic.symbolic.png")
-                                    } else {
-                                        None
-                                    },
-                                }
-                            },
-
-                            // Metadata Block Details
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Horizontal,
-                                set_spacing: 6,
-                                set_halign: gtk::Align::Fill,
-                                set_hexpand: true,
-
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical,
-                                    set_spacing: 6,
-                                    set_halign: gtk::Align::Start,
-                                    set_hexpand: true,
-
-                                    gtk::Label {
-                                        #[watch]
-                                        set_label: &model.get_current_module_language(),
-                                        set_halign: gtk::Align::Start,
-                                        add_css_class: "dimmed-text",
-                                        inline_css: "opacity: 0.6; font-size: 0.85rem; font-weight: bold; text-transform: uppercase; tracking: 1px;",
-                                        set_wrap: false,
-                                        set_ellipsize: gtk::pango::EllipsizeMode::End,
-                                    },
-                                    gtk::Label {
-                                        #[watch]
-                                        set_label: &model.get_current_module_title(),
-                                        add_css_class: "title-2",
-                                        inline_css: "font-weight: 800; font-size: 1.4rem;",
-                                        set_halign: gtk::Align::Start,
-                                        set_hexpand: false,
-                                        set_wrap: false,
-                                         set_width_chars: 20,
-                                        set_max_width_chars: 30,
-                                        set_ellipsize: gtk::pango::EllipsizeMode::End,
-                                    },
-                                    gtk::Label {
-                                        #[watch]
-                                        set_label: &model.get_current_module_contributor(),
-                                        add_css_class: "subtitle",
-                                        inline_css: "opacity: 0.7; font-size: 1rem;",
-                                        set_halign: gtk::Align::Start,
-                                        set_hexpand: false,
-                                        set_wrap: false,
-                                        set_width_chars: 20,
-                                        set_max_width_chars: 30,
-                                        set_ellipsize: gtk::pango::EllipsizeMode::End,
-                                    }
-                                },
-
-                                // Stop Button
-                                gtk::Box {
-                                    set_hexpand: false,
-                                    set_vexpand: false,
-                                    set_valign: gtk::Align::Center,
-
-                                    gtk::Button {
-                                        set_icon_name: "media-playback-stop-symbolic",
-                                        set_tooltip_text: Some("Stop"),
-                                        add_css_class: "circular",
-                                        set_valign: gtk::Align::Center,
-                                        set_halign: gtk::Align::End,
-                                        connect_clicked[sender] => move |_| {
-                                            sender.input(AudioBibleInput::Stop);
                                         }
-                                    }
-                                }
-                            },
+                                    })
+                                    .map(|tex| tex.upcast::<gtk::gdk::Paintable>())
+                                    .as_ref(),
 
-                            // Timeline Control Scrubber Platform Frame
+                                #[watch]
+                                set_resource: if model.selected_module.is_none() {
+                                    Some("/org/gtk/libgtk/icons/48x48/status/audio-input-microphone-symbolic.symbolic.png")
+                                } else {
+                                    None
+                                },
+                            }
+                        },
+
+                        // Metadata Block Details
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Horizontal,
+                            set_spacing: 6,
+                            set_halign: gtk::Align::Fill,
+                            set_hexpand: true,
+
                             gtk::Box {
                                 set_orientation: gtk::Orientation::Vertical,
+                                set_spacing: 6,
+                                set_halign: gtk::Align::Start,
                                 set_hexpand: true,
-                                inline_css: "margin: 10px 0;",
 
-                                #[name = "timeline_progress"]
-                                gtk::ProgressBar {
-                                    set_hexpand: true,
+                                gtk::Label {
                                     #[watch]
-                                    set_fraction: {
-                                            let total = model.selected_module.as_ref()
-                                                .and_then(|m| m.metadata.as_ref())
-                                                .map(|meta| meta.duration_ms as f64)
-                                                .unwrap_or(3600000.0);
-                                            (model.current_time_ms as f64 / total).clamp(0.0, 1.0)
-                                        },
+                                    set_label: &model.get_current_module_language(),
+                                    set_halign: gtk::Align::Start,
+                                    add_css_class: "dimmed-text",
+                                    inline_css: "opacity: 0.6; font-size: 0.85rem; font-weight: bold; text-transform: uppercase; tracking: 1px;",
+                                    set_wrap: false,
+                                    set_ellipsize: gtk::pango::EllipsizeMode::End,
+                                },
+                                gtk::Label {
+                                    #[watch]
+                                    set_label: &model.get_current_module_title(),
+                                    add_css_class: "title-2",
+                                    inline_css: "font-weight: 800; font-size: 1.4rem;",
+                                    set_halign: gtk::Align::Start,
+                                    set_hexpand: false,
+                                    set_wrap: false,
+                                     set_width_chars: 20,
+                                    set_max_width_chars: 30,
+                                    set_ellipsize: gtk::pango::EllipsizeMode::End,
+                                },
+                                gtk::Label {
+                                    #[watch]
+                                    set_label: &model.get_current_module_contributor(),
+                                    add_css_class: "subtitle",
+                                    inline_css: "opacity: 0.7; font-size: 1rem;",
+                                    set_halign: gtk::Align::Start,
+                                    set_hexpand: false,
+                                    set_wrap: false,
+                                    set_width_chars: 20,
+                                    set_max_width_chars: 30,
+                                    set_ellipsize: gtk::pango::EllipsizeMode::End,
+                                }
+                            },
 
-                                    inline_css: "
-                                    progressbar trough { background: rgba(255, 255, 255, 0.15); border-radius: 3px; min-height: 4px; }
-                                    progressbar progress { background: rgba(255, 255, 255, 1.0); border-radius: 3px; min-height: 4px; }
-                                ",
+                            // Stop Button
+                            gtk::Box {
+                                set_hexpand: false,
+                                set_vexpand: false,
+                                set_valign: gtk::Align::Center,
 
-                                    add_controller = gtk::GestureClick {
-                                        set_button: 1,
-
-                                        connect_pressed[sender] => move |gesture, _, x, _| {
-                                            if let Some(widget) = gesture.widget() {
-                                                let widget_width = widget.width() as f64;
-                                                if widget_width > 0.0 {
-                                                    let sanitized_x = x.clamp(0.0, widget_width);
-                                                    let click_ratio = sanitized_x / widget_width;
-                                                    sender.input(AudioBibleInput::SeekRatio(click_ratio));
-                                                }
-                                            }
-                                        }
+                                gtk::Button {
+                                    set_icon_name: "media-playback-stop-symbolic",
+                                    set_tooltip_text: Some("Stop"),
+                                    add_css_class: "circular",
+                                    set_valign: gtk::Align::Center,
+                                    set_halign: gtk::Align::End,
+                                    connect_clicked[sender] => move |_| {
+                                        sender.input(AudioBibleInput::Stop);
                                     }
-                                }
-                            },
-
-                            // Time Label Counters Block
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Horizontal,
-
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &Self::format_time_ms(model.current_time_ms),
-                                    add_css_class: "monospace",
-                                    inline_css: "opacity: 0.6; font-size: 0.85rem;",
-                                    set_xalign: 0.0,
-                                },
-                                gtk::Separator {
-                                    set_hexpand: true,
-                                    set_opacity: 0.0,
-                                },
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &format!("-{}", Self::format_time_ms(
-                                            model.selected_module.as_ref().and_then(|m| m.metadata.as_ref()).map(|meta| meta.duration_ms).unwrap_or(0) - model.current_time_ms
-                                        )),
-                                    add_css_class: "monospace",
-                                    inline_css: "opacity: 0.6; font-size: 0.85rem;",
-                                    set_xalign: 1.0,
-                                }
-                            },
-
-                            // Transport Operational Deck Layout
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Horizontal,
-                                set_spacing: 24,
-                                set_halign: gtk::Align::Center,
-
-                                gtk::Button {
-                                    set_label: "1x",
-                                    set_tooltip_text: Some("Change Playback Speed"),
-                                    add_css_class: "circular",
-                                    add_css_class: "dimmed",
-                                    inline_css: "button { background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); font-weight: bold; font-size: 0.85rem; padding: 10px; min-width: 44px; min-height: 44px; }"
-                                },
-
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Horizontal,
-                                    set_spacing: 12,
-                                    set_halign: gtk::Align::Center,
-
-                                    gtk::Button {
-                                        set_icon_name: "media-skip-backward-symbolic",
-                                        set_tooltip_text: Some("Skip backward 15s"),
-                                        connect_clicked[sender] => move |_| {
-                                            sender.input(AudioBibleInput::SkipBackward);
-                                        }
-                                    },
-
-                                    #[name = "play_toggle_btn"]
-                                    gtk::Button {
-                                        #[watch]
-                                        set_icon_name: if model.is_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" },
-                                        set_tooltip_text: Some("Play/Pause"),
-                                        connect_clicked[sender] => move |_| {
-                                            sender.input(AudioBibleInput::TogglePlayback);
-                                        }
-                                    },
-
-                                    gtk::Button {
-                                        set_icon_name: "media-skip-forward-symbolic",
-                                        set_tooltip_text: Some("Skip forward 30s"),
-                                        connect_clicked[sender] => move |_| {
-                                            sender.input(AudioBibleInput::SkipForward);
-                                        }
-                                    },
-                                },
-
-                                gtk::Button {
-                                    set_icon_name: "media-playlist-repeat-song-symbolic",
-                                    add_css_class: "circular",
-                                    add_css_class: "dimmed",
                                 }
                             }
                         },
 
-                        // =========================================================
-                        // RIGHT PANEL: CONTENT ACTION PANE
-                        // =========================================================
+                        // Timeline Control Scrubber Platform Frame
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
-                            set_hexpand: true, // Consumes all leftover space fluidly
-                            set_vexpand: true,
-                            inline_css: "background: transparent;",
+                            set_hexpand: true,
+                            inline_css: "margin: 10px 0;",
 
-                            // CASE A: NO INSTANTIATED AUDIO SELECTION -> TARGET LISTING SIDEBAR
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
+                            #[name = "timeline_progress"]
+                            gtk::ProgressBar {
                                 set_hexpand: true,
-                                set_vexpand: true,
-                                set_margin_all: 24,
-                                inline_css: "background: rgba(0, 0, 0, 0.15); border-radius: 24px; padding: 16px; border: 1px solid rgba(255,255,255,0.05);",
-
                                 #[watch]
-                                set_visible: model.selected_module.is_none(),
+                                set_fraction: {
+                                        let total = model.selected_module.as_ref()
+                                            .and_then(|m| m.metadata.as_ref())
+                                            .map(|meta| meta.duration_ms as f64)
+                                            .unwrap_or(3600000.0);
+                                        (model.current_time_ms as f64 / total).clamp(0.0, 1.0)
+                                    },
 
-                                gtk::Label {
-                                    set_label: "Select an Audio Module",
-                                    add_css_class: "title-3",
-                                    set_halign: gtk::Align::Start,
-                                    set_margin_bottom: 12,
-                                },
+                                inline_css: "
+                                    progressbar trough { background: rgba(255, 255, 255, 0.15); border-radius: 3px; min-height: 4px; }
+                                    progressbar progress { background: rgba(255, 255, 255, 1.0); border-radius: 3px; min-height: 4px; }
+                                ",
 
-                                gtk::ScrolledWindow {
-                                    set_vexpand: true,
-                                    set_hscrollbar_policy: gtk::PolicyType::Never,
+                                add_controller = gtk::GestureClick {
+                                    set_button: 1,
 
-                                    #[name = "module_list"]
-                                    gtk::ListBox {
-                                        set_selection_mode: gtk::SelectionMode::Single,
-                                        add_css_class: "navigation-sidebar",
-                                        inline_css: "background: transparent;",
-                                        connect_row_selected[sender] => move |_listbox, selected_row| {
-                                            if let Some(row) = selected_row {
-                                                sender.input(AudioBibleInput::SelectModule(row.index() as usize));
+                                    connect_pressed[sender] => move |gesture, _, x, _| {
+                                        if let Some(widget) = gesture.widget() {
+                                            let widget_width = widget.width() as f64;
+                                            if widget_width > 0.0 {
+                                                let sanitized_x = x.clamp(0.0, widget_width);
+                                                let click_ratio = sanitized_x / widget_width;
+                                                sender.input(AudioBibleInput::SeekRatio(click_ratio));
                                             }
                                         }
                                     }
                                 }
+                            }
+                        },
+
+                        // Time Label Counters Block
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Horizontal,
+
+                            gtk::Label {
+                                #[watch]
+                                set_label: &Self::format_time_ms(model.current_time_ms),
+                                add_css_class: "monospace",
+                                inline_css: "opacity: 0.6; font-size: 0.85rem;",
+                                set_xalign: 0.0,
+                            },
+                            gtk::Separator {
+                                set_hexpand: true,
+                                set_opacity: 0.0,
+                            },
+                            gtk::Label {
+                                #[watch]
+                                set_label: &format!("-{}", Self::format_time_ms(
+                                        model.selected_module.as_ref().and_then(|m| m.metadata.as_ref()).map(|meta| meta.duration_ms).unwrap_or(0) - model.current_time_ms
+                                    )),
+                                add_css_class: "monospace",
+                                inline_css: "opacity: 0.6; font-size: 0.85rem;",
+                                set_xalign: 1.0,
+                            }
+                        },
+
+                        // Transport Operational Deck Layout
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Horizontal,
+                            set_spacing: 24,
+                            set_halign: gtk::Align::Center,
+
+                            gtk::Button {
+                                set_label: "1x",
+                                set_tooltip_text: Some("Change Playback Speed"),
+                                add_css_class: "circular",
+                                add_css_class: "dimmed",
+                                inline_css: "button { background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); font-weight: bold; font-size: 0.85rem; padding: 10px; min-width: 44px; min-height: 44px; }"
                             },
 
-                            // CASE B: MODULE FOCUS ACTIVE -> COMPUTE DYNAMIC LYRICS / TEXT STRINGS
                             gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_hexpand: true,
-                                set_vexpand: true,
-                                set_spacing: 16,
-                                set_margin_all: 24,
+                                set_orientation: gtk::Orientation::Horizontal,
+                                set_spacing: 12,
+                                set_halign: gtk::Align::Center,
 
-                                #[watch]
-                                set_visible: model.selected_module.is_some(),
-
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: if model.selected_node_id.is_some() { "Active Chapter Text" } else { "Chapter Content" },
-                                    add_css_class: "title-3",
-                                    inline_css: "font-weight: bold; opacity: 0.9;",
-                                    set_halign: gtk::Align::Start,
+                                gtk::Button {
+                                    set_icon_name: "media-skip-backward-symbolic",
+                                    set_tooltip_text: Some("Skip backward 15s"),
+                                    connect_clicked[sender] => move |_| {
+                                        sender.input(AudioBibleInput::SkipBackward);
+                                    }
                                 },
 
-                                gtk::ScrolledWindow {
-                                    set_vexpand: true,
-                                    set_hscrollbar_policy: gtk::PolicyType::Never,
+                                #[name = "play_toggle_btn"]
+                                gtk::Button {
+                                    #[watch]
+                                    set_icon_name: if model.is_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" },
+                                    set_tooltip_text: Some("Play/Pause"),
+                                    connect_clicked[sender] => move |_| {
+                                        sender.input(AudioBibleInput::TogglePlayback);
+                                    }
+                                },
 
-                                    gtk::Box {
+                                gtk::Button {
+                                    set_icon_name: "media-skip-forward-symbolic",
+                                    set_tooltip_text: Some("Skip forward 30s"),
+                                    connect_clicked[sender] => move |_| {
+                                        sender.input(AudioBibleInput::SkipForward);
+                                    }
+                                },
+                            },
+
+                            gtk::Button {
+                                set_icon_name: "media-playlist-repeat-song-symbolic",
+                                add_css_class: "circular",
+                                add_css_class: "dimmed",
+                            }
+                        }
+                    },
+
+                    // =========================================================
+                    // RIGHT PANEL: CONTENT ACTION PANE
+                    // =========================================================
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_hexpand: true, // Consumes all leftover space fluidly
+                        set_vexpand: true,
+                        inline_css: "background: transparent;",
+
+                        //Interactive card widget is here...make it look like the ui from sift ui
+                        // gtk::Box{
+                        //     set_orientation: gtk::Orientation::Vertical,
+                        //     set_halign: gtk::Align::Fill,
+                        //     inline_css: "background-color: rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 16px",
+                        //     set_margin_horizontal: 20,
+
+                        //     gtk::Label{
+                        //         set_label: "Chapter 1",
+                        //         add_css_class: "title-3",
+                        //         set_halign: gtk::Align::Start,
+                        //     },
+
+                        //      gtk::Label{
+                        //         set_label: "Chapter 1 of 6",
+                        //         set_halign: gtk::Align::Start,
+                        //     }
+
+                        // },
+                        #[name = "interactive_navigation_card"]
+                        gtk::Box{
+                            set_halign: gtk::Align::Fill,
+                            inline_css: "background: transparent;",
+                            set_hexpand: true,
+                            set_vexpand: true,
+
+
+                        },
+
+                        match model.view_control {
+                            // CASE A: NO INSTANTIATED AUDIO SELECTION -> TARGET LISTING SIDEBAR
+                            ViewControl::Playlist => gtk::Box {
                                         set_orientation: gtk::Orientation::Vertical,
-                                        set_spacing: 16,
-                                        set_margin_all: 8,
+                                        set_hexpand: true,
+                                        set_vexpand: true,
+                                        set_margin_all: 24,
+                                        inline_css: "background: rgba(0, 0, 0, 0.15); border-radius: 24px; padding: 16px; border: 1px solid rgba(255,255,255,0.05);",
+
+                                        #[watch]
+                                        set_visible: model.selected_module.is_none() || model.is_stopped,
 
                                         gtk::Label {
-                                            #[watch]
-                                            set_label: if model.active_text.is_empty() { "No active text streaming available." } else { &model.active_text },
-                                            set_wrap: true,
-                                            add_css_class: "body",
-                                            inline_css: "font-size: 1.25rem; line-height: 1.75; opacity: 0.95;",
-                                            set_justify: gtk::Justification::Left,
+                                            set_label: "Select an Audio Module",
+                                            add_css_class: "title-3",
+                                            set_halign: gtk::Align::Start,
+                                            set_margin_bottom: 12,
+                                        },
+
+                                        gtk::ScrolledWindow {
+                                            set_vexpand: true,
+                                            set_hscrollbar_policy: gtk::PolicyType::Never,
+
+                                            #[name = "module_list"]
+                                            gtk::ListBox {
+                                                set_selection_mode: gtk::SelectionMode::Single,
+                                                add_css_class: "navigation-sidebar",
+                                                inline_css: "background: transparent;",
+                                                connect_row_selected[sender] => move |_listbox, selected_row| {
+                                                    if let Some(row) = selected_row {
+                                                        sender.input(AudioBibleInput::SelectModule(row.index() as usize));
+                                                    }
+                                                }
+                                            }
                                         }
-                                    }
+                                    },
+
+                            // CASE B: MODULE FOCUS ACTIVE -> COMPUTE DYNAMIC LYRICS / TEXT STRINGS
+                            ViewControl::Lyrics => gtk::Box {
+                                            set_orientation: gtk::Orientation::Vertical,
+                                            set_hexpand: true,
+                                            set_vexpand: true,
+                                            set_spacing: 16,
+                                            set_margin_all: 24,
+
+                                            #[watch]
+                                            set_visible: model.selected_module.is_some(),
+
+                                            gtk::Label {
+                                                #[watch]
+                                                set_label: if model.selected_node_id.is_some() { "Active Chapter Text" } else { "Chapter Content" },
+                                                add_css_class: "title-3",
+                                                inline_css: "font-weight: bold; opacity: 0.9;",
+                                                set_halign: gtk::Align::Start,
+                                            },
+
+                                            gtk::ScrolledWindow {
+                                                set_vexpand: true,
+                                                set_hscrollbar_policy: gtk::PolicyType::Never,
+
+                                                gtk::Box {
+                                                    set_orientation: gtk::Orientation::Vertical,
+                                                    set_spacing: 16,
+                                                    set_margin_all: 8,
+
+                                                    gtk::Label {
+                                                        #[watch]
+                                                        set_label: if model.active_text.is_empty() { "No active text streaming available." } else { &model.active_text },
+                                                        set_wrap: true,
+                                                        add_css_class: "body",
+                                                        inline_css: "font-size: 1.25rem; line-height: 1.75; opacity: 0.95;",
+                                                        set_justify: gtk::Justification::Left,
+                                                    }
+                                                }
+                                            }
+                                        },
                                 }
                             }
                         }
@@ -431,7 +473,6 @@ impl Component for AudioBiblePage {
                 }
             }
         }
-    }
 
     fn init(
         init: Self::Init,
@@ -454,6 +495,8 @@ impl Component for AudioBiblePage {
             playback_state: None,
             background_gradient_colors: vec![(0.1, 0.1, 0.1, 1.0)],
             available_modules: engine.get_audio_modules(),
+            view_control: ViewControl::Playlist,
+            is_stopped: false,
             is_sidebar_visible,
         };
 
@@ -462,14 +505,19 @@ impl Component for AudioBiblePage {
         for module in &model.available_modules {
             // 1. CONSTRUCT THE START ARTWORK (PREFIX)
             let artwork_image = gtk::Image::builder()
-                .width_request(40)
-                .height_request(40)
-                .valign(gtk::Align::Fill)
-                .halign(gtk::Align::Fill)
+                .pixel_size(54)
+                .width_request(54)
+                .height_request(54)
+                .valign(gtk::Align::Center)
+                .halign(gtk::Align::Center)
+                .margin_top(2)
+                .margin_bottom(2)
+                .margin_start(2)
+                .margin_end(2)
                 .build();
 
-            // Add a clean styling class for consistency
-            artwork_image.add_css_class("sidebar-artwork");
+            // Use relm4's inline_css equivalent via GTK CSS or just a clean class
+            artwork_image.add_css_class("rounded-container"); // Matches your existing CSS class for the main artwork
 
             // Try to unpack the raw image data from your secure wrapper
             if let Some(bytes) = module.artwork.image_bytes() {
@@ -477,9 +525,9 @@ impl Component for AudioBiblePage {
                     gtk::gio::MemoryInputStream::from_bytes(&gtk::glib::Bytes::from(&bytes));
                 match gtk::gdk_pixbuf::Pixbuf::from_stream_at_scale(
                     &stream,
-                    40,
-                    40,
-                    true,
+                    54,
+                    54,
+                    false,
                     gtk::gio::Cancellable::NONE,
                 ) {
                     Ok(pixbuf) => {
@@ -531,6 +579,11 @@ impl Component for AudioBiblePage {
             widgets.module_list.append(&row);
         }
 
+        let interactive_card = InteractiveNavigationCard::builder().launch(()).detach();
+        widgets
+            .interactive_navigation_card
+            .append(interactive_card.widget());
+
         // Establish core hardware monitoring heartbeat loops every 30ms
         let sender_clone = sender.clone();
         glib::timeout_add_local(std::time::Duration::from_millis(30), move || {
@@ -552,6 +605,7 @@ impl Component for AudioBiblePage {
                         player.play();
                         self.is_playing = true;
                     }
+                    self.is_stopped = false;
                 }
             }
 
@@ -561,6 +615,7 @@ impl Component for AudioBiblePage {
                     self.is_playing = false;
                     self.current_time_ms = 0;
                     self.active_text = String::new();
+                    self.is_stopped = true;
                 }
             }
             AudioBibleInput::SkipForward => {

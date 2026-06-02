@@ -1,15 +1,18 @@
+use ::xbible_engine::engines::{
+    audio_engine::engine::AudioEngine, xbible_engine::engine::XBibleEngine,
+};
 use adw::prelude::*;
 use relm4::prelude::*;
-use ::xbible_engine::engines::{xbible_engine::engine::XBibleEngine, audio_engine::engine::AudioEngine};
 use std::fmt::Debug;
 use std::{collections::HashMap, sync::Arc};
 
+use crate::features::core::pages::audio_bible::audio_bible_page::AudioBibleOutput;
 use crate::features::core::{
     components::sidebar::{NavigationPage, SideBar, SidebarMessage},
     pages::{
+        audio_bible::audio_bible_page::AudioBiblePage,
         library::library_page::{LibraryPage, LibraryPageCategory, LibraryPageOutput},
         study::study_page::{StudyPage, StudyPageOutPut},
-        audio_bible::audio_bible_page::AudioBiblePage,
     },
 };
 
@@ -34,12 +37,12 @@ impl PageController {
 pub struct AppModel {
     side_bar: Controller<SideBar>,
     pages_cache: HashMap<String, PageController>,
-    
+
     engine: Option<Arc<XBibleEngine>>,
     audio_engine: Arc<AudioEngine>,
     is_engine_ready: bool,
     engine_error: Option<String>,
-    
+
     is_sidebar_visible: bool,
     current_page_key: String,
 }
@@ -49,7 +52,7 @@ pub enum AppInputMessage {
     ToggleSidebar,
     SetContentPage(NavigationPage),
     SetSidebarVisibility(bool),
-    
+
     EngineInitializationSuccess(Arc<XBibleEngine>),
     EngineInitializationFailed(String),
 }
@@ -136,20 +139,20 @@ impl SimpleComponent for AppModel {
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        
         let engine_sender = sender.clone();
-        std::thread::spawn(move || {
-            match std::panic::catch_unwind(|| XBibleEngine::new()) {
+        std::thread::spawn(
+            move || match std::panic::catch_unwind(|| XBibleEngine::new()) {
                 Ok(loaded_engine) => {
-                    engine_sender.input(AppInputMessage::EngineInitializationSuccess(loaded_engine));
+                    engine_sender
+                        .input(AppInputMessage::EngineInitializationSuccess(loaded_engine));
                 }
                 Err(_) => {
-                    engine_sender.input(AppInputMessage::EngineInitializationFailed(
-                        String::from("Failed to initialize SWORD background subsystems.")
-                    ));
+                    engine_sender.input(AppInputMessage::EngineInitializationFailed(String::from(
+                        "Failed to initialize SWORD background subsystems.",
+                    )));
                 }
-            }
-        });
+            },
+        );
 
         let side_bar = SideBar::builder()
             .launch(())
@@ -160,7 +163,7 @@ impl SimpleComponent for AppModel {
 
         let model = AppModel {
             side_bar,
-            pages_cache: HashMap::new(), 
+            pages_cache: HashMap::new(),
             engine: None,
             audio_engine: Arc::new(AudioEngine::new()),
             is_engine_ready: false,
@@ -185,11 +188,11 @@ impl SimpleComponent for AppModel {
                     self.is_sidebar_visible = visible;
                 }
             }
-            
+
             AppInputMessage::EngineInitializationSuccess(engine_arc) => {
                 self.engine = Some(engine_arc.clone());
                 self.is_engine_ready = true;
-                
+
                 let bible_page = PageController::Bible(
                     StudyPage::builder()
                         .launch((engine_arc.clone(), self.is_sidebar_visible))
@@ -197,9 +200,10 @@ impl SimpleComponent for AppModel {
                             StudyPageOutPut::ToggleSidebar => AppInputMessage::ToggleSidebar,
                         }),
                 );
-                self.pages_cache.insert(NavigationPage::Bible.to_key(), bible_page);
+                self.pages_cache
+                    .insert(NavigationPage::Bible.to_key(), bible_page);
             }
-            
+
             AppInputMessage::EngineInitializationFailed(err_string) => {
                 self.engine_error = Some(err_string);
                 self.is_engine_ready = false;
@@ -208,7 +212,9 @@ impl SimpleComponent for AppModel {
             AppInputMessage::SetContentPage(page) => {
                 let key = page.to_key();
 
-                let Some(ref active_engine) = self.engine else { return; };
+                let Some(ref active_engine) = self.engine else {
+                    return;
+                };
 
                 if !self.pages_cache.contains_key(&key) {
                     match page {
@@ -227,8 +233,12 @@ impl SimpleComponent for AppModel {
                         NavigationPage::AudioBible => {
                             let audio_page = PageController::AudioBible(
                                 AudioBiblePage::builder()
-                                    .launch(self.audio_engine.clone())
-                                    .detach(),
+                                    .launch((self.audio_engine.clone(), self.is_sidebar_visible))
+                                    .forward(sender.input_sender(), |message| match message {
+                                        AudioBibleOutput::ToggleSidebar => {
+                                            AppInputMessage::ToggleSidebar
+                                        }
+                                    }),
                             );
                             self.pages_cache.insert(key.clone(), audio_page);
                         }

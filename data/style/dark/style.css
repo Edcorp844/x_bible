@@ -87,6 +87,7 @@ label {
     background-color: var(--dark-2);
 }
 
+
 .studypage-menu-trigger-btn {
     border: 1px solid alpha(var(--card-fg-color), 0.1);
     background-color: var(--dark-5);
@@ -276,14 +277,12 @@ label link {
 
 /* Light Mode / Dark Mode Adaptive Gradient */
 .loading-line-pulse {
-    background-image: linear-gradient(
-        90deg,
-        transparent 0%,
-        alpha(var(--accent-color), 0.2) 20%,
-        var(--accent-color) 50%,
-        alpha(var(--accent-color), 0.2) 80%,
-        transparent 100%
-    );
+    background-image: linear-gradient(90deg,
+            transparent 0%,
+            alpha(var(--accent-color), 0.2) 20%,
+            var(--accent-color) 50%,
+            alpha(var(--accent-color), 0.2) 80%,
+            transparent 100%);
     background-size: 200% 100%;
     animation: apple-shimmer 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
 }
@@ -292,14 +291,12 @@ label link {
 @media (prefers-color-scheme: dark) {
     .loading-line-pulse {
         box-shadow: 0 0 8px alpha(var(--accent-color), 0.3);
-        background-image: linear-gradient(
-            90deg,
-            transparent 0%,
-            alpha(var(--accent-color), 0.4) 25%,
-            lighten(var(--accent-color), 10%) 50%,
-            alpha(var(--accent-color), 0.4) 75%,
-            transparent 100%
-        );
+        background-image: linear-gradient(90deg,
+                transparent 0%,
+                alpha(var(--accent-color), 0.4) 25%,
+                lighten(var(--accent-color), 10%) 50%,
+                alpha(var(--accent-color), 0.4) 75%,
+                transparent 100%);
     }
 }
 
@@ -307,6 +304,7 @@ label link {
     0% {
         background-position: -200% 0;
     }
+
     100% {
         background-position: 200% 0;
     }

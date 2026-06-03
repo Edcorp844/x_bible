@@ -37,7 +37,6 @@ pub struct BiblePage {
     pub(crate) pending_sections: VecDeque<Section>,
     pub(crate) total_sections_to_load: usize,
 
-
     pub(crate) current_book_index: usize,
     pub(crate) current_book: ModuleBook,
     pub(crate) current_chapter: i32,
@@ -608,16 +607,10 @@ impl Component for BiblePage {
             }
         }
 
-        // 4. Safety Check: If we still have nothing, handle gracefully before unwrap
         if active_module.is_none() {
             eprintln!("No modules found. Please install a SWORD module.");
-            // Note: If your struct REQUIRES a module, you might need a dummy fallback
-            // or to change your struct fields to Option<SwordModule>
         }
 
-        // 5. Initialize Model
-        // Replace your model initialization with this safer version
-        
         let model = if let (Some(m), Some(b)) = (active_module, active_book) {
             BiblePage {
                 engine,
@@ -716,7 +709,7 @@ impl Component for BiblePage {
                 self.current_chapter = 1;
                 self.is_loading = true;
                 widgets.version_label.set_label(&self.module.name);
-                
+
                 // Load content for the selected module
                 let reference = format!("{} {}", self.current_book.name, self.current_chapter);
                 sender.input(StudyInput::LoadReference(reference));
@@ -736,7 +729,7 @@ impl Component for BiblePage {
                 self.is_loading = true;
                 widgets.book_label.set_label(&self.current_book.name);
                 widgets.chapter_label.set_label("Chapter 1");
-                
+
                 // Load content for the selected book
                 let reference = format!("{} 1", self.current_book.name);
                 sender.input(StudyInput::LoadReference(reference));
@@ -769,7 +762,7 @@ impl Component for BiblePage {
                     .set_label(&format!("Chapter {}", chapter));
 
                 self.is_loading = true;
-                
+
                 // Load content for the selected chapter
                 let reference = format!("{} {}", self.current_book.name, chapter);
                 sender.input(StudyInput::LoadReference(reference));
@@ -780,9 +773,11 @@ impl Component for BiblePage {
                 self.is_loading = true;
                 widgets.loading.set_visible(self.is_loading);
                 self.sections.guard().clear();
-                
+
                 // Fetch sections from engine
-                let sections = self.engine.get_chapter_content(&self.module.name, &reference);
+                let sections = self
+                    .engine
+                    .get_chapter_content(&self.module.name, &reference);
                 sender.input(StudyInput::ReferenceLoaded(sections));
             }
 

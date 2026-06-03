@@ -32,6 +32,7 @@ pub struct AudioBiblePage {
     chapters_listbox: Option<gtk::ListBox>,
     lyrics_scrollview: Option<gtk::ScrolledWindow>,
     lyrics_box: Option<gtk::Box>,
+    verse_widgets: Vec<(String, gtk::Box, gtk::Label, gtk::Label)>,
 }
 
 #[derive(Debug, Clone)]
@@ -514,6 +515,7 @@ impl Component for AudioBiblePage {
             chapters_listbox: None,
             lyrics_scrollview: None,
             lyrics_box: None,
+            verse_widgets: Vec::new(),
         };
 
         let widgets = view_output!();
@@ -627,6 +629,9 @@ impl Component for AudioBiblePage {
     }
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
+        let mut rebuild_lyrics = false;
+        let mut update_lyrics = false;
+
         match message {
             // =========================================================================
             // 1. DYNAMIC TICK CLOCK INTERCEPTOR (DRIVES THE FLOATING CARD)
@@ -637,12 +642,21 @@ impl Component for AudioBiblePage {
                     if let Some(state) = player.execute_tick_sync() {
                         self.is_playing = state.is_playing;
                         self.current_time_ms = state.current_time_ms;
-                        self.active_text = state.active_text.clone();
+
+                        if self.active_text != state.active_text {
+                            self.active_text = state.active_text.clone();
+                            update_lyrics = true;
+                        }
 
                         if self.navigation_tree_root.is_none() {
                             self.load_and_cache_navigation_tree();
+                            rebuild_lyrics = true;
                         }
+                        let old_node_id = self.selected_node_id.clone();
                         self.sync_active_chapter(state.current_time_ms);
+                        if self.selected_node_id != old_node_id {
+                            rebuild_lyrics = true;
+                        }
                         self.playback_state = Some(state);
                     }
                 }
@@ -728,6 +742,7 @@ impl Component for AudioBiblePage {
                     }
                 }
                 self.force_synchronous_state_update();
+                update_lyrics = true;
             }
 
             // =========================================================================
@@ -751,7 +766,10 @@ impl Component for AudioBiblePage {
                     player.stop();
                     self.is_playing = false;
                     self.current_time_ms = 0;
-                    self.active_text = String::new();
+                    if !self.active_text.is_empty() {
+                        self.active_text = String::new();
+                        update_lyrics = true;
+                    }
                     self.is_stopped = true;
                 }
             }
@@ -807,9 +825,15 @@ impl Component for AudioBiblePage {
 
             AudioBibleInput::SelectModule(index) => {
                 self.select_module(index);
+                rebuild_lyrics = true;
             }
         }
-        self.render_lyrics_view(&sender.clone());
+
+        if rebuild_lyrics {
+            self.build_lyrics_view(&sender);
+        } else if update_lyrics {
+            self.update_lyrics_view();
+        }
     }
 }
 
@@ -916,6 +940,7 @@ impl AudioBiblePage {
             self.navigation_tree_root = None;
             self.flattened_chapters_cache.clear();
             self.selected_node_id = None;
+            self.verse_widgets.clear();
 
             let extracted_colors = module.artwork.extract_colors(4);
             if !extracted_colors.is_empty() {
@@ -991,11 +1016,8 @@ impl AudioBiblePage {
         }
     }
 
-    fn render_lyrics_view(&self, sender: &ComponentSender<Self>) {
+    fn build_lyrics_view(&mut self, sender: &ComponentSender<Self>) {
         let Some(lyrics_box) = &self.lyrics_box else {
-            return;
-        };
-        let Some(scrollview) = &self.lyrics_scrollview else {
             return;
         };
 
@@ -1003,12 +1025,17 @@ impl AudioBiblePage {
         while let Some(child) = lyrics_box.first_child() {
             lyrics_box.remove(&child);
         }
+        self.verse_widgets.clear();
 
-        let clean_active = self.active_text.trim();
-        let mut target_active_widget: Option<gtk::Box> = None;
+        let active_chapter = self.flattened_chapters_cache.iter().find(|c| Some(&c.id) == self.selected_node_id.as_ref());
+        let chapters_to_render = if let Some(ch) = active_chapter {
+            std::slice::from_ref(ch)
+        } else {
+            &[]
+        };
 
         // 1. Loop through your top-level chapters
-        for chapter in &self.flattened_chapters_cache {
+        for chapter in chapters_to_render {
             // Chapter Header text
             let chapter_title = gtk::Label::builder()
                 .label(&chapter.title.to_uppercase())
@@ -1021,10 +1048,7 @@ impl AudioBiblePage {
             if let children = &chapter.children {
                 for sentence_node in children {
                     let current_verse_text = sentence_node.text.as_deref().unwrap_or("");
-
-                    // Whitespace verification matching logic
-                    let is_active =
-                        !clean_active.is_empty() && clean_active == current_verse_text.trim();
+                    let clean_text = current_verse_text.trim().to_string();
 
                     // Container mimicking SwiftUI's inner layout stack
                     let verse_container = gtk::Box::new(gtk::Orientation::Vertical, 6);
@@ -1035,14 +1059,6 @@ impl AudioBiblePage {
                         .label(&sentence_node.title)
                         .halign(gtk::Align::Start)
                         .build();
-                    title_label.inline_css(&format!(
-                        "font-family: sans-serif; font-size: 10px; font-weight: bold; color: {};",
-                        if is_active {
-                            "rgba(255, 140, 0, 0.9)"
-                        } else {
-                            "rgba(255,255,255,0.15)"
-                        }
-                    ));
                     verse_container.append(&title_label);
 
                     // Spoken Content Body
@@ -1052,10 +1068,6 @@ impl AudioBiblePage {
                         .justify(gtk::Justification::Left)
                         .halign(gtk::Align::Start)
                         .build();
-                    body_label.inline_css(&format!(
-                        "font-family: serif; font-size: 23px; font-weight: 500; line-height: 1.6; color: {};",
-                        if is_active { "#ffffff" } else { "rgba(255,255,255,0.25)" }
-                    ));
                     verse_container.append(&body_label);
 
                     // Tap Navigation: Seek directly to the millisecond click target
@@ -1069,15 +1081,44 @@ impl AudioBiblePage {
                         verse_container.add_controller(gesture);
                     }
 
-                    // Save a pointer layout frame for our auto-scrolling operation
-                    if is_active {
-                        target_active_widget = Some(verse_container.clone());
-                    }
-
                     // Avoid child element click-blocking
-                    verse_container.set_can_target(false);
+                    title_label.set_can_target(false);
+                    body_label.set_can_target(false);
                     lyrics_box.append(&verse_container);
+
+                    self.verse_widgets
+                        .push((clean_text, verse_container, title_label, body_label));
                 }
+            }
+        }
+
+        // Initial style and scroll setup
+        self.update_lyrics_view();
+    }
+
+    fn update_lyrics_view(&self) {
+        let clean_active = self.active_text.trim();
+        let mut target_active_widget: Option<gtk::Box> = None;
+
+        for (clean_text, container, title_label, body_label) in &self.verse_widgets {
+            let is_active = !clean_active.is_empty() && clean_active == clean_text;
+
+            title_label.inline_css(&format!(
+                "font-family: sans-serif; font-size: 10px; font-weight: bold; color: {};",
+                if is_active {
+                    "rgba(255, 140, 0, 0.9)"
+                } else {
+                    "rgba(255,255,255,0.15)"
+                }
+            ));
+
+            body_label.inline_css(&format!(
+                "font-family: serif; font-size: 23px; font-weight: 500; line-height: 1.6; color: {};",
+                if is_active { "#ffffff" } else { "rgba(255,255,255,0.25)" }
+            ));
+
+            if is_active {
+                target_active_widget = Some(container.clone());
             }
         }
 
@@ -1085,26 +1126,23 @@ impl AudioBiblePage {
         // SCROLLVIEW READER SIMULATION: Center the active text in the viewport
         // =========================================================================
         if let Some(active_widget) = target_active_widget {
-            // 1. Extract and clone the inner widget handle out of the Option *before* moving it
-            if let scrollview_clone = scrollview.clone() {
+            if let Some(scrollview_clone) = self.lyrics_scrollview.clone() {
                 // A short timeout yields context to GTK's layout loop to compute new sizes accurately
                 glib::timeout_add_local(std::time::Duration::from_millis(35), move || {
                     let alloc = active_widget.allocation();
                     let widget_y = alloc.y();
                     let widget_height = alloc.height();
 
-                    // 2. Use the cloned handle safely inside the 'static closure
-                    if let v_adj = scrollview_clone.vadjustment() {
-                        let page_size = v_adj.page_size();
+                    let v_adj = scrollview_clone.vadjustment();
+                    let page_size = v_adj.page_size();
 
-                        // Core centering calculation matching anchor: .center
-                        let target_scroll_pos =
-                            (widget_y as f64) - (page_size / 2.0) + ((widget_height as f64) / 2.0);
+                    // Core centering calculation matching anchor: .center
+                    let target_scroll_pos =
+                        (widget_y as f64) - (page_size / 2.0) + ((widget_height as f64) / 2.0);
 
-                        // Clamp bounds safely within scroll limits
-                        let max_scroll = v_adj.upper() - page_size;
-                        v_adj.set_value(target_scroll_pos.max(0.0).min(max_scroll));
-                    }
+                    // Clamp bounds safely within scroll limits
+                    let max_scroll = v_adj.upper() - page_size;
+                    v_adj.set_value(target_scroll_pos.max(0.0).min(max_scroll));
                     glib::ControlFlow::Break
                 });
             }

@@ -261,10 +261,18 @@ impl InteractiveNavigationCard {
                 sender_clone.input(InteractiveNavigationCardInput::SelectChapter(
                     chapter_id.clone(),
                 ));
-                println!("clicked");
             });
-            row.add_controller(gesture);
-            row_box.set_can_target(false);
+            
+            // Attach to row_box instead of row, and make sure children don't steal clicks
+            row_box.add_controller(gesture);
+            if let Some(child) = row_box.first_child() {
+                child.set_can_target(false);
+                let mut next = child.next_sibling();
+                while let Some(n) = next {
+                    n.set_can_target(false);
+                    next = n.next_sibling();
+                }
+            }
 
             listbox.append(&row);
         }

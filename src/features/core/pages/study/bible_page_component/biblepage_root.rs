@@ -1,6 +1,9 @@
 use adw::prelude::*;
-use xbible_engine::engines::{module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery, xbible_engine::engine::XBibleEngine};
 use std::sync::{Arc, RwLock};
+use xbible_engine::engines::{
+    module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery,
+    xbible_engine::engine::XBibleEngine,
+};
 
 use relm4::{Component, ComponentParts, ComponentSender, Controller, prelude::*};
 
@@ -9,9 +12,7 @@ use crate::features::{
         biblepage_model::{BiblePage, StudyPageOutput},
         helpers::PageDisplayConfig,
     },
-    core::{
-        display_configurations::Config::TextConfig,
-    },
+    core::display_configurations::config::TextConfig,
     dictionary::components::dictionary_model::{DictionaryInputMessage, DictionaryPage},
 };
 

@@ -6,7 +6,7 @@ use crate::features::{
         verse_components::verse::VerseInputMessage,
     },
     core::{
-        core::AppSetting::AppSetting, display_configurations::display_configuration::DisplayConfig,
+        core::app_setting::AppSetting, display_configurations::display_configuration::DisplayConfig,
     },
 };
 use gtk::gio::prelude::SettingsExt;
@@ -42,10 +42,10 @@ impl PageDisplayConfig {
         let _ = self.settings.set_boolean("show-notes", value);
     }
 
-    pub fn set_added_style(&self, style: AddedWordStyle) {
-        // Uses the Display trait we implemented for AddedWordStyle
-        let _ = self.settings.set_string("added-style", &style.to_string());
-    }
+    // pub fn set_added_style(&self, style: AddedWordStyle) {
+    //     // Uses the Display trait we implemented for AddedWordStyle
+    //     let _ = self.settings.set_string("added-style", &style.to_string());
+    // }
 }
 
 impl Debug for dyn DisplayConfig {

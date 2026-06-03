@@ -34,7 +34,7 @@ impl Component for VerseMenuButton {
     fn init(
         init: Self::Init,
         root: Self::Root,
-        sender: ComponentSender<Self>,
+        _sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let (label, icon) = init;
 

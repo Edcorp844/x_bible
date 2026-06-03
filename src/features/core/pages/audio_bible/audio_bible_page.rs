@@ -1,5 +1,4 @@
 use adw::prelude::*;
-use gtk::prelude::*;
 use relm4::{Component, ComponentParts, ComponentSender, prelude::*};
 use std::sync::{Arc, Mutex};
 use xbible_engine::engines::audio_engine::engine::{
@@ -1100,48 +1099,47 @@ impl AudioBiblePage {
             lyrics_box.append(&chapter_title);
 
             // 2. Loop directly over the child verse nodes inside this chapter
-            if let children = &chapter.children {
-                for sentence_node in children {
-                    let current_verse_text = sentence_node.text.as_deref().unwrap_or("");
-                    let clean_text = current_verse_text.trim().to_string();
+            let children = &chapter.children;
+            for sentence_node in children {
+                let current_verse_text = sentence_node.text.as_deref().unwrap_or("");
+                let clean_text = current_verse_text.trim().to_string();
 
-                    // Container mimicking SwiftUI's inner layout stack
-                    let verse_container = gtk::Box::new(gtk::Orientation::Vertical, 6);
-                    verse_container.set_hexpand(true);
+                // Container mimicking SwiftUI's inner layout stack
+                let verse_container = gtk::Box::new(gtk::Orientation::Vertical, 6);
+                verse_container.set_hexpand(true);
 
-                    // Verse Identifier (e.g. "Verse 1")
-                    let title_label = gtk::Label::builder()
-                        .label(&sentence_node.title)
-                        .halign(gtk::Align::Start)
-                        .build();
-                    verse_container.append(&title_label);
+                // Verse Identifier (e.g. "Verse 1")
+                let title_label = gtk::Label::builder()
+                    .label(&sentence_node.title)
+                    .halign(gtk::Align::Start)
+                    .build();
+                verse_container.append(&title_label);
 
-                    // Spoken Content Body
-                    let body_label = gtk::Label::builder()
-                        .label(current_verse_text)
-                        .wrap(true)
-                        .justify(gtk::Justification::Left)
-                        .halign(gtk::Align::Start)
-                        .build();
-                    verse_container.append(&body_label);
+                // Spoken Content Body
+                let body_label = gtk::Label::builder()
+                    .label(current_verse_text)
+                    .wrap(true)
+                    .justify(gtk::Justification::Left)
+                    .halign(gtk::Align::Start)
+                    .build();
+                verse_container.append(&body_label);
 
-                    // Tap Navigation: Seek directly to the millisecond click target
-                    if let Some(timestamp_ms) = sentence_node.start_ms {
-                        let gesture = gtk::GestureClick::new();
-                        let sender_clone = sender.clone();
+                // Tap Navigation: Seek directly to the millisecond click target
+                if let Some(timestamp_ms) = sentence_node.start_ms {
+                    let gesture = gtk::GestureClick::new();
+                    let sender_clone = sender.clone();
 
-                        gesture.connect_released(move |_, _, _, _| {
-                            sender_clone.input(AudioBibleInput::Seek(timestamp_ms));
-                        });
-                        verse_container.add_controller(gesture);
-                    }
-
-                    // Allow clicks to hit the labels and bubble up to the verse container's gesture
-                    lyrics_box.append(&verse_container);
-
-                    self.verse_widgets
-                        .push((clean_text, verse_container, title_label, body_label));
+                    gesture.connect_released(move |_, _, _, _| {
+                        sender_clone.input(AudioBibleInput::Seek(timestamp_ms));
+                    });
+                    verse_container.add_controller(gesture);
                 }
+
+                // Allow clicks to hit the labels and bubble up to the verse container's gesture
+                lyrics_box.append(&verse_container);
+
+                self.verse_widgets
+                    .push((clean_text, verse_container, title_label, body_label));
             }
         }
 

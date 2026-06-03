@@ -1,11 +1,13 @@
 use adw::prelude::*;
 use relm4::{Component, ComponentController, ComponentParts, Controller, prelude::*};
-use xbible_engine::engines::{module_engine::sword_module::module::SwordModule, xbible_engine::engine::XBibleEngine};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use xbible_engine::engines::{
+    module_engine::sword_module::module::SwordModule, xbible_engine::engine::XBibleEngine,
+};
 
-use crate::features::core::{
-    pages::library::components::swordmodule_section::{ModuleSection, ModuleSectionInit},
+use crate::features::core::pages::library::components::swordmodule_section::{
+    ModuleSection, ModuleSectionInit,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,8 +55,6 @@ pub struct LibraryPage {
 
 #[derive(Debug)]
 pub enum LibraryPageInput {
-    SetCategory(LibraryPageCategory),
-    Refresh,
     ModuleSelected(String),
 }
 
@@ -129,21 +129,8 @@ impl Component for LibraryPage {
         ComponentParts { model, widgets }
     }
 
-    fn update_with_view(
-        &mut self,
-        widgets: &mut Self::Widgets,
-        message: Self::Input,
-        sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
-            LibraryPageInput::SetCategory(new_cat) => {
-                self.category = new_cat;
-                self.sync_sections(&widgets.section_container, sender);
-            }
-            LibraryPageInput::Refresh => {
-                self.sync_sections(&widgets.section_container, sender);
-            }
             LibraryPageInput::ModuleSelected(code) => {
                 println!("Module selected: {}", code);
             }

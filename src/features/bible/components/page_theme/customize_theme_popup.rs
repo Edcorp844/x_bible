@@ -10,13 +10,16 @@ use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 use crate::features::{
     bible::components::{
         page::{
-            biblepage_settings::BiblePageSettings, helpers::AvailableFonts, section::{SectionInput, SectionModel}, verse_components::verse::VerseInputMessage
+            biblepage_settings::BiblePageSettings,
+            helpers::AvailableFonts,
+            section::{SectionInput, SectionModel},
+            verse_components::verse::VerseInputMessage,
         },
         page_theme::theme_data::ThemePreset,
     },
     core::display_configurations::{
-            Config::TextConfig, preview_display_configuration::PreviewDisplayConfig,
-        },
+        config::TextConfig, preview_display_configuration::PreviewDisplayConfig,
+    },
 };
 
 pub struct CustomizeThemePopup {
@@ -523,7 +526,6 @@ impl Component for CustomizeThemePopup {
 
 impl CustomizeThemePopup {
     fn setup_preview(&mut self) {
-        
         let saved_state = BiblePageSettings::load();
         let modules = self.engine.get_bible_modules();
 
@@ -532,7 +534,9 @@ impl CustomizeThemePopup {
         } else {
             modules.first().cloned()
         };
-        let preview_sections = self.engine.get_single_entry(&active_module.unwrap(), "John 3:16");
+        let preview_sections = self
+            .engine
+            .get_single_entry(&active_module.unwrap(), "John 3:16");
         let mut guard = self.preview.guard();
         guard.clear();
         for section in preview_sections {

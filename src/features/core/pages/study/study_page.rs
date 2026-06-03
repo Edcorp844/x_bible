@@ -1,12 +1,12 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 use std::sync::{Arc, RwLock};
+use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 
 use crate::features::{
     bible::components::page::helpers::PageDisplayConfig,
     core::{
-        display_configurations::Config::TextConfig,
+        display_configurations::config::TextConfig,
         pages::study::{
             bible_page_component::biblepage_root::{BiblePageRoot, BiblePageRootOutput},
             bible_search::search_page::SearchPage,

@@ -2,7 +2,7 @@ use gtk::gio::prelude::SettingsExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::features::core::core::AppSetting::AppSetting;
+use crate::features::core::core::app_setting::AppSetting;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct VerseAnnotation {

@@ -19,7 +19,7 @@ use crate::features::core::{
 enum PageController {
     Bible(Controller<StudyPage>),
     AudioBible(Controller<AudioBiblePage>),
-    Store(Controller<StudyPage>),
+    //Store(Controller<StudyPage>),
     Library(Controller<LibraryPage>),
 }
 
@@ -28,7 +28,7 @@ impl PageController {
         match self {
             Self::Bible(c) => c.widget(),
             Self::AudioBible(c) => c.widget(),
-            Self::Store(c) => c.widget(),
+            // Self::Store(c) => c.widget(),
             Self::Library(c) => c.widget(),
         }
     }

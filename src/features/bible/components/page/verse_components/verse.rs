@@ -1,6 +1,8 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use xbible_engine::engines::module_engine::module_engine_extensions::{module_engine_dictionary_ext::DictionaryQuery, module_engine_module_content_ext::Verse};
+use xbible_engine::engines::module_engine::module_engine_extensions::{
+    module_engine_dictionary_ext::DictionaryQuery, module_engine_module_content_ext::Verse,
+};
 
 use crate::features::{
     bible::components::page::{
@@ -12,10 +14,7 @@ use crate::features::{
         },
         word::{WordModel, WordModelInput, WordModelOutput},
     },
-    core::{
-        display_configurations::Config::TextConfig,
-        
-    },
+    core::display_configurations::config::TextConfig,
 };
 
 pub struct VerseModel {

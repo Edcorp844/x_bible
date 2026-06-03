@@ -5,5 +5,5 @@ pub mod display_configurations;
 pub mod pages;
 
 pub mod core {
-    pub use crate::features::core::app_settings::app_settings::AppSetting;
+    pub use crate::features::core::app_settings::app_settings::app_setting;
 }

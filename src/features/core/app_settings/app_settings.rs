@@ -1,4 +1,4 @@
-pub mod AppSetting {
+pub mod app_setting {
 
     use gtk::gio::Settings;
 

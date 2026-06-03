@@ -1,4 +1,4 @@
-use crate::features::core::core::AppSetting::AppSetting;
+use crate::features::core::core::app_setting::AppSetting;
 use gtk::gio::prelude::SettingsExt;
 use serde::{Deserialize, Serialize};
 
@@ -31,22 +31,5 @@ impl BiblePageSettings {
         if let Ok(json) = serde_json::to_string(&state) {
             let _ = settings.set_string("last-session", &json);
         }
-    }
-
-    /// Helper to update just one part of the state without losing the rest
-    pub fn update_location(module: Option<String>, book: Option<String>, chapter: Option<i32>) {
-        let mut current = Self::load();
-
-        if module.is_some() {
-            current.last_module = module;
-        }
-        if book.is_some() {
-            current.last_book = book;
-        }
-        if chapter.is_some() {
-            current.last_chapter = chapter;
-        }
-
-        Self::save(current);
     }
 }

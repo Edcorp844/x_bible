@@ -1,7 +1,7 @@
 pub mod display_configuration;
 pub mod page_display_config;
 pub mod preview_display_configuration;
-pub mod Config {
+pub mod config {
     use std::sync::{Arc, RwLock};
 
     use crate::features::core::display_configurations::display_configuration::DisplayConfig;

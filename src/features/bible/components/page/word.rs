@@ -1,13 +1,14 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use xbible_engine::engines::module_engine::module_engine_extensions::{module_engine_dictionary_ext::DictionaryQuery, module_engine_module_content_ext::Word};
+use xbible_engine::engines::module_engine::module_engine_extensions::{
+    module_engine_dictionary_ext::DictionaryQuery, module_engine_module_content_ext::Word,
+};
 
 use crate::features::{
     bible::components::page::{
-        helpers::{AddedWordStyle, AvailableFonts, SegmentStyle},
-        verse_components::verse_annotation::VerseAnnotation,
+        helpers::AvailableFonts, verse_components::verse_annotation::VerseAnnotation,
     },
-    core::display_configurations::Config::TextConfig,
+    core::display_configurations::config::TextConfig,
 };
 
 pub struct WordModel {

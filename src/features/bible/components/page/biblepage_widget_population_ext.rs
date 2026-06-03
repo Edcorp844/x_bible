@@ -1,6 +1,8 @@
 use adw::prelude::*;
 use relm4::{ComponentSender, prelude::*};
-use xbible_engine::engines::module_engine::{module_engine_extensions::module_engine_books_and_chapter_ext::{CategorizedBook, Testament}, sword_module::{module::SwordModule, module_book::ModuleBook}};
+use xbible_engine::engines::module_engine::sword_module::{
+    module::SwordModule, module_book::ModuleBook,
+};
 
 use crate::features::bible::components::page::biblepage_model::{
     BiblePage, BiblePageWidgets, StudyInput,
@@ -129,15 +131,50 @@ impl BiblePage {
 
                     // Determine if book is OT or NT
                     // Common OT books (1-39 in traditional order)
-                    let ot_books = vec!["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
-                        "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings",
-                        "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalm",
-                        "Psalms", "Proverbs", "Ecclesiastes", "Isaiah", "Jeremiah", "Lamentations",
-                        "Ezekiel", "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah",
-                        "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi"];
-                    
+                    let ot_books = vec![
+                        "Genesis",
+                        "Exodus",
+                        "Leviticus",
+                        "Numbers",
+                        "Deuteronomy",
+                        "Joshua",
+                        "Judges",
+                        "Ruth",
+                        "1 Samuel",
+                        "2 Samuel",
+                        "1 Kings",
+                        "2 Kings",
+                        "1 Chronicles",
+                        "2 Chronicles",
+                        "Ezra",
+                        "Nehemiah",
+                        "Esther",
+                        "Job",
+                        "Psalm",
+                        "Psalms",
+                        "Proverbs",
+                        "Ecclesiastes",
+                        "Isaiah",
+                        "Jeremiah",
+                        "Lamentations",
+                        "Ezekiel",
+                        "Daniel",
+                        "Hosea",
+                        "Joel",
+                        "Amos",
+                        "Obadiah",
+                        "Jonah",
+                        "Micah",
+                        "Nahum",
+                        "Habakkuk",
+                        "Zephaniah",
+                        "Haggai",
+                        "Zechariah",
+                        "Malachi",
+                    ];
+
                     let is_ot = ot_books.iter().any(|&b| book.name.starts_with(b));
-                    
+
                     if is_ot {
                         ot_grid.append(&btn);
                         ot_cont.set_visible(true);
@@ -220,16 +257,5 @@ impl BiblePage {
             .width_request(85)
             .height_request(40)
             .build()
-    }
-
-    pub(crate) fn loading_progress(&self) -> f64 {
-        if self.total_sections_to_load == 0 {
-            println!("0");
-            return 0.0;
-        }
-        let loaded = self.total_sections_to_load - self.pending_sections.len();
-        let fraction = loaded as f64 / self.total_sections_to_load as f64;
-        println!("{}", fraction);
-        fraction
     }
 }

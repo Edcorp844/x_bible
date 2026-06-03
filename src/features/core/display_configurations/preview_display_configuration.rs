@@ -6,7 +6,7 @@ use crate::features::{
         },
         page_theme::theme_data::ThemePreset,
     },
-    core::display_configurations::{Config::TextConfig, display_configuration::DisplayConfig},
+    core::display_configurations::{config::TextConfig, display_configuration::DisplayConfig},
 };
 
 pub struct PreviewDisplayConfig {

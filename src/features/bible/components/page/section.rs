@@ -1,7 +1,10 @@
 // 🌟 Fixed: Removed TextDirection from the gtk import to prevent name clashing
 use gtk::prelude::*;
 use relm4::prelude::*;
-use xbible_engine::engines::module_engine::module_engine_extensions::{module_engine_dictionary_ext::DictionaryQuery, module_engine_module_content_ext::{Section, TextDirection}};
+use xbible_engine::engines::module_engine::module_engine_extensions::{
+    module_engine_dictionary_ext::DictionaryQuery,
+    module_engine_module_content_ext::{Section, TextDirection},
+};
 
 use crate::features::{
     bible::components::page::{
@@ -11,9 +14,7 @@ use crate::features::{
         },
         word::{WordModel, WordModelInput},
     },
-    core::{
-        display_configurations::Config::TextConfig,
-    },
+    core::display_configurations::config::TextConfig,
 };
 
 pub trait TextDirectionExt {
@@ -23,8 +24,8 @@ pub trait TextDirectionExt {
 // 🌟 Fixed: Bind the trait explicitly to the enum type originating from the xbible_engine crate
 impl TextDirectionExt for TextDirection {
     fn to_gtk_text_direction(&self) -> gtk::TextDirection {
-        use TextDirection  as EngineDir;
-        
+        use TextDirection as EngineDir;
+
         match *self {
             EngineDir::Ltr => gtk::TextDirection::Ltr,
             EngineDir::Rtl => gtk::TextDirection::Rtl,

@@ -1,6 +1,6 @@
 use adw::prelude::*;
 use gtk::glib::clone;
-use relm4::{WorkerController, prelude::*};
+use relm4::{ prelude::*};
 use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery;
 use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_module_content_ext::Section;
 use xbible_engine::engines::module_engine::sword_module::module::SwordModule;
@@ -24,7 +24,7 @@ use crate::features::bible::components::page::verse_components::verse_annotation
 use crate::features::bible::components::page_theme::customize_theme_popup::{
     CustomizeThemeOutput, CustomizeThemePopup,
 };
-use crate::features::core::display_configurations::Config::TextConfig;
+use crate::features::core::display_configurations::config::TextConfig;
 
 pub struct BiblePage {
     pub(crate) engine: Arc<XBibleEngine>,
@@ -37,7 +37,6 @@ pub struct BiblePage {
     pub(crate) pending_sections: VecDeque<Section>,
     pub(crate) total_sections_to_load: usize,
 
-    pub(crate) current_book_index: usize,
     pub(crate) current_book: ModuleBook,
     pub(crate) current_chapter: i32,
     pub(crate) is_loading: bool,
@@ -52,12 +51,6 @@ pub enum StudyInput {
     ToggleDisplay(VerseInputMessage),
     SetConfig(TextConfig),
     ReferenceLoaded(Vec<Section>),
-    BooksLoaded(Vec<ModuleBook>),
-    BookNameReady {
-        name: String,
-        chapter: i32,
-        chapter_count: i32,
-    },
     ProcessQueue,
     FinishedLoading,
     OpenCustomizethemePopup,
@@ -472,9 +465,9 @@ impl Component for BiblePage {
                                                         .iter().map(
                                                             |string| string.as_str()
                                                         ).collect::<Vec<_>>())),
-                                                        connect_selected_item_notify[sender] => move |dd| {
+                                                        //connect_selected_item_notify[sender] => move |dd| {
                                                             //sender.input(StudyPageInput::UpdateModule(dd.selected()));
-                                                        }
+                                                        //}
                                                     },
                                                 }
 
@@ -615,7 +608,6 @@ impl Component for BiblePage {
             BiblePage {
                 engine,
                 module: m,
-                current_book_index: 0,
                 current_book: b,
                 current_chapter: active_chapter,
                 sections,
@@ -715,14 +707,6 @@ impl Component for BiblePage {
                 sender.input(StudyInput::LoadReference(reference));
             }
 
-            StudyInput::BooksLoaded(books) => {
-                // Worker returned the list. Now populate the UI.
-                self.populate_book_grid(widgets, &books, sender.clone());
-                if let Some(first_book) = books.first() {
-                    sender.input(StudyInput::SetBook(first_book.clone()));
-                }
-            }
-
             StudyInput::SetBook(book) => {
                 self.current_book = book.clone();
                 self.current_chapter = 1;
@@ -733,26 +717,6 @@ impl Component for BiblePage {
                 // Load content for the selected book
                 let reference = format!("{} 1", self.current_book.name);
                 sender.input(StudyInput::LoadReference(reference));
-            }
-
-            StudyInput::BookNameReady {
-                name,
-                chapter,
-                chapter_count,
-            } => {
-                self.current_book.name = name.clone();
-
-                // 2. Update the labels
-                widgets.book_label.set_label(&name);
-                widgets
-                    .chapter_label
-                    .set_label(&format!("Chapter {}", chapter));
-
-                // 3. NEW: Rebuild the chapter grid for this specific book!
-                self.populate_chapter_grid(widgets, sender.clone(), chapter_count);
-
-                // 4. Finally, load the text for the requested chapter
-                sender.input(StudyInput::LoadReference(format!("{} {}", name, chapter)));
             }
 
             StudyInput::SetChapter(chapter) => {

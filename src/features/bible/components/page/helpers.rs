@@ -4,21 +4,6 @@ use gtk::gio::Settings;
 
 /// How a segment should be rendered or interpreted
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SegmentStyle {
-    Plain,
-    Added,
-    RedLetter,
-    Note,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TitleStyle {
-    H1,
-    H2,
-    H3,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AddedWordStyle {
     Italic,
     Brackets,

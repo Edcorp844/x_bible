@@ -8,10 +8,20 @@ pub struct InteractiveNavigationCard {
     pub cached_chapters_list: Vec<AudioNode>,
     pub selected_node_id: Option<String>,
     pub current_playback_ms: i64,
-    pub live_audio_volume: f32,
     is_revealed: bool,
-    // FIX: Keep a direct, cheap reference to the ListBox inside your state struct
     chapters_listbox: Option<gtk::ListBox>,
+    row_widgets: Vec<RowWidgetCache>,
+}
+
+pub struct RowWidgetCache {
+    chapter_id: String,
+    row_box: gtk::Box,
+    icon: gtk::Image,
+    num: gtk::Label,
+    title: gtk::Label,
+    dur_label: gtk::Label,
+    start_ms: i64,
+    end_ms: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -137,8 +147,8 @@ impl Component for InteractiveNavigationCard {
             cached_chapters_list: vec![],
             selected_node_id: None,
             current_playback_ms: 0,
-            live_audio_volume: 0.5,
             chapters_listbox: None,
+            row_widgets: vec![],
         };
 
         let widgets = view_output!();
@@ -150,6 +160,9 @@ impl Component for InteractiveNavigationCard {
     }
 
     fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
+        let mut rebuild = false;
+        let mut update = false;
+
         match message {
             InteractiveNavigationCardInput::ToggleReveal => {
                 self.is_revealed = !self.is_revealed;
@@ -158,102 +171,86 @@ impl Component for InteractiveNavigationCard {
                 self.selected_node_id = Some(id.clone());
                 self.is_revealed = false;
                 let _ = sender.output(id);
+                update = true;
             }
             InteractiveNavigationCardInput::UpdatePlaybackTime(ms) => {
                 self.current_playback_ms = ms;
+                update = true;
             }
             InteractiveNavigationCardInput::UpdateChapters(chapters, title, subtitle) => {
+                let current_first = self.cached_chapters_list.first().map(|c| c.id.clone());
+                let new_first = chapters.first().map(|c| c.id.clone());
+                if self.cached_chapters_list.len() != chapters.len() || current_first != new_first {
+                    rebuild = true;
+                }
                 self.cached_chapters_list = chapters;
                 self.current_title = title;
                 self.current_subtitle = subtitle;
             }
             InteractiveNavigationCardInput::SyncSelectedNode(id) => {
-                self.selected_node_id = id;
+                if self.selected_node_id != id {
+                    self.selected_node_id = id;
+                    update = true;
+                }
             }
         }
 
-        self.render_chapters_list(&sender);
+        if rebuild {
+            self.build_chapters_list(&sender);
+        } else if update {
+            self.update_chapters_list();
+        }
     }
 }
 
 impl InteractiveNavigationCard {
-    fn render_chapters_list(&self, sender: &ComponentSender<Self>) {
-        // Safe check to see if the widget handle has been bound yet
+    fn build_chapters_list(&mut self, sender: &ComponentSender<Self>) {
         let Some(listbox) = &self.chapters_listbox else {
             return;
         };
 
-        // Clear old rows
         while let Some(child) = listbox.first_child() {
             listbox.remove(&child);
         }
+        self.row_widgets.clear();
 
         for (index, chapter) in self.cached_chapters_list.iter().enumerate() {
-            let is_selected = self.selected_node_id.as_ref() == Some(&chapter.id);
-
             let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
             row_box.set_margin_start(8);
             row_box.set_margin_end(8);
             row_box.set_margin_top(4);
             row_box.set_margin_bottom(4);
 
-            if is_selected {
-                row_box.inline_css("background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px;");
-            } else {
-                row_box.inline_css("padding: 8px 12px;");
-            }
+            let icon = gtk::Image::builder()
+                .icon_name("audio-volume-high-symbolic")
+                .build();
 
-            // Left side
-            if is_selected {
-                let icon = gtk::Image::builder()
-                    .icon_name("audio-volume-high-symbolic")
-                    .build();
-                row_box.append(&icon);
-            } else {
-                let num = gtk::Label::new(Some(&(index + 1).to_string()));
-                num.inline_css("font-family: monospace; color: rgba(255,255,255,0.5);");
-                row_box.append(&num);
-            }
+            let num = gtk::Label::new(Some(&(index + 1).to_string()));
+            num.inline_css("font-family: monospace; color: rgba(255,255,255,0.5);");
 
-            // Chapter title
+            row_box.append(&icon);
+            row_box.append(&num);
+
             let title = gtk::Label::builder()
                 .label(&chapter.title)
                 .hexpand(true)
                 .halign(gtk::Align::Start)
                 .build();
-            title.inline_css(if is_selected {
-                "color: #ffffff; font-weight: 500;"
-            } else {
-                "color: rgba(255,255,255,0.85);"
-            });
             row_box.append(&title);
 
-            // Duration
-            let duration_text = if is_selected {
-                let remaining = (chapter.end_ms.unwrap_or(0) - self.current_playback_ms).max(0);
-                let secs = remaining / 1000;
-                format!("-{}:{:02}", secs / 60, secs % 60)
-            } else {
-                let total =
-                    ((chapter.end_ms.unwrap_or(0) - chapter.start_ms.unwrap_or(0)) / 1000).max(0);
-                format!("{}m", total / 60)
-            };
-
-            let dur_label = gtk::Label::new(Some(&duration_text));
+            let dur_label = gtk::Label::new(None);
             dur_label.inline_css("font-family: monospace; color: rgba(255,255,255,0.6);");
             row_box.append(&dur_label);
 
             let row = gtk::ListBoxRow::new();
             row.set_child(Some(&row_box));
             row.set_widget_name(&format!("row_{}", chapter.id));
-
-            // =========================================================================
-            // THE FIX: Add click gesture to make the manual row active
-            // =========================================================================
             row.set_focusable(true);
             row.set_activatable(true);
 
             let gesture = gtk::GestureClick::new();
+            gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
+
             let sender_clone = sender.clone();
             let chapter_id = chapter.id.clone();
 
@@ -262,19 +259,51 @@ impl InteractiveNavigationCard {
                     chapter_id.clone(),
                 ));
             });
-            
-            // Attach to row_box instead of row, and make sure children don't steal clicks
-            row_box.add_controller(gesture);
-            if let Some(child) = row_box.first_child() {
-                child.set_can_target(false);
-                let mut next = child.next_sibling();
-                while let Some(n) = next {
-                    n.set_can_target(false);
-                    next = n.next_sibling();
-                }
-            }
+            row.add_controller(gesture);
 
             listbox.append(&row);
+
+            self.row_widgets.push(RowWidgetCache {
+                chapter_id: chapter.id.clone(),
+                row_box,
+                icon,
+                num,
+                title,
+                dur_label,
+                start_ms: chapter.start_ms.unwrap_or(0),
+                end_ms: chapter.end_ms.unwrap_or(0),
+            });
+        }
+
+        self.update_chapters_list();
+    }
+
+    fn update_chapters_list(&self) {
+        for widget in &self.row_widgets {
+            let is_selected = self.selected_node_id.as_ref() == Some(&widget.chapter_id);
+
+            if is_selected {
+                widget.row_box.inline_css("background-color: rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 12px;");
+                widget.icon.set_visible(true);
+                widget.num.set_visible(false);
+                widget.title.inline_css("color: #ffffff; font-weight: 500;");
+
+                let remaining = (widget.end_ms - self.current_playback_ms).max(0);
+                let secs = remaining / 1000;
+                widget
+                    .dur_label
+                    .set_label(&format!("-{}:{:02}", secs / 60, secs % 60));
+            } else {
+                widget.row_box.inline_css(
+                    "background-color: transparent; border-radius: 0px; padding: 8px 12px;",
+                );
+                widget.icon.set_visible(false);
+                widget.num.set_visible(true);
+                widget.title.inline_css("color: rgba(255,255,255,0.85);");
+
+                let total = ((widget.end_ms - widget.start_ms) / 1000).max(0);
+                widget.dur_label.set_label(&format!("{}m", total / 60));
+            }
         }
     }
 }

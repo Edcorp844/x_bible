@@ -1,6 +1,7 @@
 use adw::prelude::*;
+use gtk::prelude::*;
 use relm4::{Component, ComponentParts, ComponentSender, prelude::*};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use xbible_engine::engines::audio_engine::engine::{
     AudioEngine, AudioModuleInfo, AudioNode, PlaybackState,
 };
@@ -12,6 +13,7 @@ use crate::features::core::pages::audio_bible::{
 pub struct AudioBiblePage {
     engine: Arc<AudioEngine>,
     hardware_player: Option<HardwareAudioPlayer>, // Hardware layer backplane
+    pending_player: Arc<Mutex<Option<HardwareAudioPlayer>>>,
     is_playing: bool,
     current_time_ms: i64,
     selected_module_index: Option<usize>,
@@ -29,7 +31,6 @@ pub struct AudioBiblePage {
     is_sidebar_visible: bool,
 
     active_text: String,
-    chapters_listbox: Option<gtk::ListBox>,
     lyrics_scrollview: Option<gtk::ScrolledWindow>,
     lyrics_box: Option<gtk::Box>,
     verse_widgets: Vec<(String, gtk::Box, gtk::Label, gtk::Label)>,
@@ -46,6 +47,7 @@ pub enum AudioBibleInput {
     HandleChapterSeek(String),
     UpdatePlaybackState,
     TogglePlayback,
+    ModuleLoaded(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -332,13 +334,26 @@ impl Component for AudioBiblePage {
                                             }
                                         },
 
-                                        #[name = "play_toggle_btn"]
-                                        gtk::Button {
+                                        #[name = "play_toggle_stack"]
+                                        gtk::Stack {
                                             #[watch]
-                                            set_icon_name: if model.is_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" },
-                                            set_tooltip_text: Some("Play/Pause"),
-                                            connect_clicked[sender] => move |_| {
-                                                sender.input(AudioBibleInput::TogglePlayback);
+                                            set_visible_child_name: if model.is_loading { "loading" } else { "button" },
+
+                                            add_named[Some("loading")] = &gtk::Spinner {
+                                                set_spinning: true,
+                                                set_width_request: 24,
+                                                set_height_request: 24,
+                                                set_margin_start: 12,
+                                                set_margin_end: 12,
+                                            },
+
+                                            add_named[Some("button")] = &gtk::Button {
+                                                #[watch]
+                                                set_icon_name: if model.is_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" },
+                                                set_tooltip_text: Some("Play/Pause"),
+                                                connect_clicked[sender] => move |_| {
+                                                    sender.input(AudioBibleInput::TogglePlayback);
+                                                }
                                             }
                                         },
 
@@ -496,6 +511,7 @@ impl Component for AudioBiblePage {
         let mut model = Self {
             engine: engine.clone(),
             hardware_player: None,
+            pending_player: Arc::new(Mutex::new(None)),
             is_playing: false,
             current_time_ms: 0,
             active_text: String::new(),
@@ -512,7 +528,6 @@ impl Component for AudioBiblePage {
             is_stopped: false,
             interactive_card,
             is_sidebar_visible,
-            chapters_listbox: None,
             lyrics_scrollview: None,
             lyrics_box: None,
             verse_widgets: Vec::new(),
@@ -730,19 +745,36 @@ impl Component for AudioBiblePage {
             // 2. DROP-DOWN SELECTION EMBED ROUTER
             // =========================================================================
             AudioBibleInput::HandleChapterSeek(chapter_id) => {
+                // Look up the exact start time from our cache
+                let target_time = self
+                    .flattened_chapters_cache
+                    .iter()
+                    .find(|c| c.id == chapter_id)
+                    .map(|c| c.start_ms.unwrap_or(0));
+
                 // Signal core engine to look up internal structure shifts
-                self.engine.seek_to_chapter(chapter_id);
+                self.engine.seek_to_chapter(chapter_id.clone());
 
-                // Fixed: Safely intercept target state millisecond timestamps to scrub underlying player assets
-                if let Some(target_state) = self.engine.get_playback_state() {
+                if let Some(timestamp_ms) = target_time {
+                    self.current_time_ms = timestamp_ms;
+
+                    if let Some(ref player) = self.hardware_player {
+                        player.seek_to(timestamp_ms);
+                    }
+                } else if let Some(target_state) = self.engine.get_playback_state() {
+                    // Fallback to engine state if not found in cache
                     self.current_time_ms = target_state.current_time_ms;
-
                     if let Some(ref player) = self.hardware_player {
                         player.seek_to(self.current_time_ms);
                     }
                 }
+
+                if self.selected_node_id.as_deref() != Some(chapter_id.as_str()) {
+                    self.selected_node_id = Some(chapter_id);
+                    rebuild_lyrics = true;
+                }
+
                 self.force_synchronous_state_update();
-                update_lyrics = true;
             }
 
             // =========================================================================
@@ -824,7 +856,24 @@ impl Component for AudioBiblePage {
             }
 
             AudioBibleInput::SelectModule(index) => {
-                self.select_module(index);
+                self.select_module(index, &sender);
+            }
+            AudioBibleInput::ModuleLoaded(success) => {
+                self.is_loading = false;
+                if success {
+                    let extracted_player = {
+                        let mut lock = self.pending_player.lock().unwrap();
+                        lock.take()
+                    };
+
+                    if let Some(player) = extracted_player {
+                        player.play();
+                        self.hardware_player = Some(player);
+                        self.is_playing = true;
+                        self.load_and_cache_navigation_tree();
+                        self.force_synchronous_state_update();
+                    }
+                }
                 rebuild_lyrics = true;
             }
         }
@@ -930,7 +979,7 @@ impl AudioBiblePage {
         "Unknown".to_string()
     }
 
-    fn select_module(&mut self, index: usize) {
+    fn select_module(&mut self, index: usize, sender: &ComponentSender<Self>) {
         let modules = self.get_available_modules();
         if index < modules.len() {
             let module = modules[index].clone();
@@ -952,29 +1001,32 @@ impl AudioBiblePage {
                 self.background_gradient_colors = vec![(0.1, 0.1, 0.1, 1.0)];
             }
 
-            // Route decoded streams back into hardware audio architecture
-            match self.engine.load_audio_module(module.absolute_path.clone()) {
+            let engine_clone = self.engine.clone();
+            let pending_player_clone = self.pending_player.clone();
+            let sender_clone = sender.clone();
+            let module_path = module.absolute_path.clone();
+            let duration = module
+                .metadata
+                .as_ref()
+                .map(|m| m.duration_ms)
+                .unwrap_or(3600000);
+
+            std::thread::spawn(move || match engine_clone.load_audio_module(module_path) {
                 Ok(bytes) => {
-                    let duration = module
-                        .metadata
-                        .as_ref()
-                        .map(|m| m.duration_ms)
-                        .unwrap_or(3600000);
-                    if let Ok(player) =
-                        HardwareAudioPlayer::new(bytes, self.engine.clone(), duration)
-                    {
-                        player.play();
-                        self.hardware_player = Some(player);
-                        self.is_playing = true;
-                        self.load_and_cache_navigation_tree();
-                        self.force_synchronous_state_update();
+                    if let Ok(player) = HardwareAudioPlayer::new(bytes, engine_clone, duration) {
+                        if let Ok(mut lock) = pending_player_clone.lock() {
+                            *lock = Some(player);
+                        }
+                        sender_clone.input(AudioBibleInput::ModuleLoaded(true));
+                    } else {
+                        sender_clone.input(AudioBibleInput::ModuleLoaded(false));
                     }
                 }
                 Err(e) => {
                     println!("[AudioBiblePage] ERROR loading audio module: {:?}", e);
+                    sender_clone.input(AudioBibleInput::ModuleLoaded(false));
                 }
-            }
-            self.is_loading = false;
+            });
         }
     }
 
@@ -1027,7 +1079,10 @@ impl AudioBiblePage {
         }
         self.verse_widgets.clear();
 
-        let active_chapter = self.flattened_chapters_cache.iter().find(|c| Some(&c.id) == self.selected_node_id.as_ref());
+        let active_chapter = self
+            .flattened_chapters_cache
+            .iter()
+            .find(|c| Some(&c.id) == self.selected_node_id.as_ref());
         let chapters_to_render = if let Some(ch) = active_chapter {
             std::slice::from_ref(ch)
         } else {
@@ -1081,9 +1136,7 @@ impl AudioBiblePage {
                         verse_container.add_controller(gesture);
                     }
 
-                    // Avoid child element click-blocking
-                    title_label.set_can_target(false);
-                    body_label.set_can_target(false);
+                    // Allow clicks to hit the labels and bubble up to the verse container's gesture
                     lyrics_box.append(&verse_container);
 
                     self.verse_widgets

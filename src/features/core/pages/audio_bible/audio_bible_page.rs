@@ -6,14 +6,14 @@ use xbible_engine::engines::audio_engine::engine::{
 };
 
 use crate::features::core::pages::audio_bible::{
-    audio_player::HardwareAudioPlayer, interactive_navigation_card::InteractiveNavigationCard,
+    audio_player::HardwareAudioPlayer,
+    interactive_navigation_card::{InteractiveNavigationCard, InteractiveNavigationCardInput},
 };
 pub struct AudioBiblePage {
     engine: Arc<AudioEngine>,
     hardware_player: Option<HardwareAudioPlayer>, // Hardware layer backplane
     is_playing: bool,
     current_time_ms: i64,
-    active_text: String,
     selected_module_index: Option<usize>,
     selected_module: Option<AudioModuleInfo>,
     navigation_tree_root: Option<AudioNode>,
@@ -27,6 +27,11 @@ pub struct AudioBiblePage {
     view_control: ViewControl,
     interactive_card: Controller<InteractiveNavigationCard>,
     is_sidebar_visible: bool,
+
+    active_text: String,
+    chapters_listbox: Option<gtk::ListBox>,
+    lyrics_scrollview: Option<gtk::ScrolledWindow>,
+    lyrics_box: Option<gtk::Box>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +42,7 @@ pub enum AudioBibleInput {
     Seek(i64),
     SeekRatio(f64),
     SelectModule(usize),
+    HandleChapterSeek(String),
     UpdatePlaybackState,
     TogglePlayback,
 }
@@ -353,130 +359,126 @@ impl Component for AudioBiblePage {
                             },
 
                             // =========================================================
-    // RIGHT PANEL: CONTENT ACTION PANE
-    // =========================================================
-    gtk::Box {
-        set_orientation: gtk::Orientation::Vertical,
-        set_hexpand: true, // Consumes all leftover space fluidly
-        set_vexpand: true,
-        inline_css: "background: transparent;",
-
-        // =========================================================
-        // OVERLAY WORKSPACE LAYER
-        // =========================================================
-        gtk::Overlay {
-            set_hexpand: true,
-            set_vexpand: true,
-
-            // Layer 1: THE MAIN CHILD (Baseline canvas)
-            #[wrap(Some)]
-            set_child = &gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
-                set_hexpand: true,
-                set_vexpand: true,
-                set_margin_top: 85,
-
-                match model.view_control {
-                    // CASE A: NO INSTANTIATED AUDIO SELECTION -> TARGET LISTING SIDEBAR
-                    ViewControl::Playlist => gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_hexpand: true,
-                        set_vexpand: true,
-                        set_margin_all: 24,
-
-                        #[watch]
-                        set_visible: model.selected_module.is_none() || model.is_stopped,
-
-                        gtk::Label {
-                            set_label: "● ● ○",
-                            add_css_class: "",
-                            set_halign: gtk::Align::Start,
-                            set_margin_bottom: 12,
-                            set_margin_horizontal: 24,
-                        },
-
-                        gtk::ScrolledWindow {
-                            set_vexpand: true,
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-
-                            #[name = "module_list"]
-                            gtk::ListBox {
-                                set_selection_mode: gtk::SelectionMode::Single,
-                                add_css_class: "navigation-sidebar",
+                            // RIGHT PANEL: CONTENT ACTION PANE
+                            // =========================================================
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_hexpand: true, // Consumes all leftover space fluidly
+                                set_vexpand: true,
                                 inline_css: "background: transparent;",
-                                connect_row_selected[sender] => move |_listbox, selected_row| {
-                                    if let Some(row) = selected_row {
-                                        sender.input(AudioBibleInput::SelectModule(row.index() as usize));
+
+                                // =========================================================
+                                // OVERLAY WORKSPACE LAYER
+                                // =========================================================
+                                gtk::Overlay {
+                                    set_hexpand: true,
+                                    set_vexpand: true,
+
+                                    // Layer 1: THE MAIN CHILD (Baseline canvas)
+                                    #[wrap(Some)]
+                                    set_child = &gtk::Box {
+                                        set_orientation: gtk::Orientation::Vertical,
+                                        set_hexpand: true,
+                                        set_vexpand: true,
+                                        set_margin_top: 85,
+
+                                        match model.view_control {
+                                            // CASE A: NO INSTANTIATED AUDIO SELECTION -> TARGET LISTING SIDEBAR
+                                            ViewControl::Playlist => gtk::Box {
+                                                set_orientation: gtk::Orientation::Vertical,
+                                                set_hexpand: true,
+                                                set_vexpand: true,
+                                                set_margin_all: 24,
+
+                                                #[watch]
+                                                set_visible: model.selected_module.is_none() || model.is_stopped,
+
+                                                gtk::Label {
+                                                    set_label: "● ● ○",
+                                                    add_css_class: "",
+                                                    set_halign: gtk::Align::Start,
+                                                    set_margin_bottom: 12,
+                                                    set_margin_horizontal: 24,
+                                                },
+
+                                                gtk::ScrolledWindow {
+                                                    set_vexpand: true,
+                                                    set_hscrollbar_policy: gtk::PolicyType::Never,
+
+                                                    #[name = "module_list"]
+                                                    gtk::ListBox {
+                                                        set_selection_mode: gtk::SelectionMode::Single,
+                                                        add_css_class: "navigation-sidebar",
+                                                        inline_css: "background: transparent;",
+                                                        connect_row_selected[sender] => move |_listbox, selected_row| {
+                                                            if let Some(row) = selected_row {
+                                                                sender.input(AudioBibleInput::SelectModule(row.index() as usize));
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+
+                                            // CASE B: MODULE FOCUS ACTIVE -> COMPUTE DYNAMIC LYRICS / TEXT STRINGS
+                                            ViewControl::Lyrics => gtk::Box {
+                                                set_orientation: gtk::Orientation::Vertical,
+                                                set_hexpand: true,
+                                                set_vexpand: true,
+                                                set_spacing: 16,
+                                                set_margin_all: 24,
+
+                                                #[watch]
+                                                set_visible: model.selected_module.is_some(),
+
+                                                gtk::Label {
+                                                    #[watch]
+                                                    set_label: if model.selected_node_id.is_some() { "Active Chapter Text" } else { "Chapter Content" },
+                                                    add_css_class: "title-3",
+                                                    inline_css: "font-weight: bold; opacity: 0.9;",
+                                                    set_halign: gtk::Align::Start,
+                                                },
+
+                                                #[name = "lyrics_scrollview"]
+                                                gtk::ScrolledWindow {
+                                                    set_vexpand: true,
+                                                    set_hscrollbar_policy: gtk::PolicyType::Never,
+
+                                                    #[name = "lyrics_box"]
+                                                    gtk::Box {
+                                                        set_orientation: gtk::Orientation::Vertical,
+                                                        set_spacing: 24,
+                                                        set_margin_all: 8,
+                                                        set_hexpand: true,
+
+
+                                                    }
+                                                }
+                                            },
+                                        }
+                                    },
+
+                                    // Layer 2: THE FLOATING OVERLAY CONTAINER
+                                    // This configuration perfectly replicates the study-page design mechanics!
+                                    add_overlay = &gtk::Box {
+                                        set_halign: gtk::Align::Fill,  // Stretch horizontally to fit the column width
+                                        set_valign: gtk::Align::Start, // Pin tightly to the top edge
+                                        set_vexpand: false,            // CRITICAL: Tells GTK not to hog vertical space
+                                        set_margin_all: 24,
+
+                                        #[name = "interactive_navigation_card"]
+                                        gtk::Box {
+                                            set_orientation: gtk::Orientation::Vertical,
+                                            set_halign: gtk::Align::Fill,
+                                            inline_css: "background: transparent;",
+                                        }
                                     }
                                 }
                             }
                         }
-                    },
-
-                    // CASE B: MODULE FOCUS ACTIVE -> COMPUTE DYNAMIC LYRICS / TEXT STRINGS
-                    ViewControl::Lyrics => gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_hexpand: true,
-                        set_vexpand: true,
-                        set_spacing: 16,
-                        set_margin_all: 24,
-
-                        #[watch]
-                        set_visible: model.selected_module.is_some(),
-
-                        gtk::Label {
-                            #[watch]
-                            set_label: if model.selected_node_id.is_some() { "Active Chapter Text" } else { "Chapter Content" },
-                            add_css_class: "title-3",
-                            inline_css: "font-weight: bold; opacity: 0.9;",
-                            set_halign: gtk::Align::Start,
-                        },
-
-                        gtk::ScrolledWindow {
-                            set_vexpand: true,
-                            set_hscrollbar_policy: gtk::PolicyType::Never,
-
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_spacing: 16,
-                                set_margin_all: 8,
-
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: if model.active_text.is_empty() { "No active text streaming available." } else { &model.active_text },
-                                    set_wrap: true,
-                                    add_css_class: "body",
-                                    inline_css: "font-size: 1.25rem; line-height: 1.75; opacity: 0.95;",
-                                    set_justify: gtk::Justification::Left,
-                                }
-                            }
-                        }
-                    },
-                }
-            },
-
-            // Layer 2: THE FLOATING OVERLAY CONTAINER
-            // This configuration perfectly replicates the study-page design mechanics!
-            add_overlay = &gtk::Box {
-                set_halign: gtk::Align::Fill,  // Stretch horizontally to fit the column width
-                set_valign: gtk::Align::Start, // Pin tightly to the top edge
-                set_vexpand: false,            // CRITICAL: Tells GTK not to hog vertical space
-                set_margin_all: 24,
-
-                #[name = "interactive_navigation_card"]
-                gtk::Box {
-                    set_orientation: gtk::Orientation::Vertical,
-                    set_halign: gtk::Align::Fill,
-                    inline_css: "background: transparent;",
-                }
-            }
-        }
-    }
-                        }
                     }
                 }
             }
-        }
+    }
 
     fn init(
         init: Self::Init,
@@ -484,14 +486,13 @@ impl Component for AudioBiblePage {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let (engine, is_sidebar_visible) = init;
-        let interactive_card =
-            InteractiveNavigationCard::builder()
-                .launch(())
-                .forward(sender.input_sender(), |_| {
-                    // Map child outputs to parent inputs if needed, or leave empty
-                    unreachable!()
-                });
-        let model = Self {
+        let interactive_card = InteractiveNavigationCard::builder()
+            .launch(())
+            .forward(sender.input_sender(), |selected_chapter_id| {
+                AudioBibleInput::HandleChapterSeek(selected_chapter_id)
+            });
+
+        let mut model = Self {
             engine: engine.clone(),
             hardware_player: None,
             is_playing: false,
@@ -510,9 +511,15 @@ impl Component for AudioBiblePage {
             is_stopped: false,
             interactive_card,
             is_sidebar_visible,
+            chapters_listbox: None,
+            lyrics_scrollview: None,
+            lyrics_box: None,
         };
 
         let widgets = view_output!();
+
+        model.lyrics_scrollview = Some(widgets.lyrics_scrollview.clone());
+        model.lyrics_box = Some(widgets.lyrics_box.clone());
 
         for module in &model.available_modules {
             // 1. CONSTRUCT THE START ARTWORK (PREFIX)
@@ -619,8 +626,113 @@ impl Component for AudioBiblePage {
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match message {
+            // =========================================================================
+            // 1. DYNAMIC TICK CLOCK INTERCEPTOR (DRIVES THE FLOATING CARD)
+            // =========================================================================
+            AudioBibleInput::UpdatePlaybackState => {
+                // First: Poll the hardware tick state if the player exists
+                if let Some(ref player) = self.hardware_player {
+                    if let Some(state) = player.execute_tick_sync() {
+                        self.is_playing = state.is_playing;
+                        self.current_time_ms = state.current_time_ms;
+                        self.active_text = state.active_text.clone();
+
+                        if self.navigation_tree_root.is_none() {
+                            self.load_and_cache_navigation_tree();
+                        }
+                        self.sync_active_chapter(state.current_time_ms);
+                        self.playback_state = Some(state);
+                    }
+                }
+
+                // =========================================================================
+                // FIX: MOVE WIDGET EMISSION OUTSIDE THE HARDWARE STATE LOCK
+                // This guarantees layout updates, chapters loading, and animations fire
+                // even if the stream is paused, stopped, or buffer loading!
+                // =========================================================================
+                if self.selected_module.is_some() {
+                    // --- COMPUTE LIVE TEXT FOR THE WIDGET ---
+                    let current_title = if let Some(ref node_id) = self.selected_node_id {
+                        self.flattened_chapters_cache
+                            .iter()
+                            .find(|c| c.id == *node_id)
+                            .map(|c| c.title.clone())
+                            .unwrap_or_default()
+                    } else {
+                        self.selected_module
+                            .as_ref()
+                            .and_then(|m| m.metadata.as_ref())
+                            .map(|meta| meta.display_title.clone())
+                            .unwrap_or_else(|| {
+                                self.selected_module
+                                    .as_ref()
+                                    .map(|m| m.file_name.clone())
+                                    .unwrap_or_default()
+                            })
+                    };
+
+                    let current_subtitle = if let Some(ref node_id) = self.selected_node_id {
+                        if let Some(idx) = self
+                            .flattened_chapters_cache
+                            .iter()
+                            .position(|c| c.id == *node_id)
+                        {
+                            format!(
+                                "Chapter {} of {}",
+                                idx + 1,
+                                self.flattened_chapters_cache.len()
+                            )
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    };
+
+                    // --- FORWARD CACHED IMAGES & STRUCTS DOWNSTREAM TO VISUAL LAYERS ---
+                    self.interactive_card
+                        .emit(InteractiveNavigationCardInput::UpdateChapters(
+                            self.flattened_chapters_cache.clone(),
+                            current_title,
+                            current_subtitle,
+                        ));
+
+                    self.interactive_card
+                        .emit(InteractiveNavigationCardInput::UpdatePlaybackTime(
+                            self.current_time_ms,
+                        ));
+
+                    if let Some(ref node_id) = self.selected_node_id {
+                        self.interactive_card.emit(
+                            InteractiveNavigationCardInput::SyncSelectedNode(Some(node_id.clone())),
+                        );
+                    }
+                }
+            }
+
+            // =========================================================================
+            // 2. DROP-DOWN SELECTION EMBED ROUTER
+            // =========================================================================
+            AudioBibleInput::HandleChapterSeek(chapter_id) => {
+                // Signal core engine to look up internal structure shifts
+                self.engine.seek_to_chapter(chapter_id);
+
+                // Fixed: Safely intercept target state millisecond timestamps to scrub underlying player assets
+                if let Some(target_state) = self.engine.get_playback_state() {
+                    self.current_time_ms = target_state.current_time_ms;
+
+                    if let Some(ref player) = self.hardware_player {
+                        player.seek_to(self.current_time_ms);
+                    }
+                }
+                self.force_synchronous_state_update();
+            }
+
+            // =========================================================================
+            // STANDARD TRADITIONAL TRANSPORT ACTIONS (UNTOUCHED)
+            // =========================================================================
             AudioBibleInput::TogglePlayback => {
                 if let Some(ref player) = self.hardware_player {
                     if self.is_playing {
@@ -643,6 +755,7 @@ impl Component for AudioBiblePage {
                     self.is_stopped = true;
                 }
             }
+
             AudioBibleInput::SkipForward => {
                 if let Some(ref player) = self.hardware_player {
                     let target_ms = (self.current_time_ms + 30000).min(
@@ -657,6 +770,7 @@ impl Component for AudioBiblePage {
                     self.force_synchronous_state_update();
                 }
             }
+
             AudioBibleInput::SkipBackward => {
                 if let Some(ref player) = self.hardware_player {
                     let target_ms = (self.current_time_ms - 15000).max(0);
@@ -665,6 +779,7 @@ impl Component for AudioBiblePage {
                     self.force_synchronous_state_update();
                 }
             }
+
             AudioBibleInput::Seek(time_ms) => {
                 if let Some(ref player) = self.hardware_player {
                     if (time_ms - self.current_time_ms).abs() > 400 {
@@ -673,6 +788,7 @@ impl Component for AudioBiblePage {
                     }
                 }
             }
+
             AudioBibleInput::SeekRatio(ratio) => {
                 if let Some(ref player) = self.hardware_player {
                     let duration = self
@@ -688,25 +804,12 @@ impl Component for AudioBiblePage {
                     }
                 }
             }
+
             AudioBibleInput::SelectModule(index) => {
                 self.select_module(index);
             }
-            AudioBibleInput::UpdatePlaybackState => {
-                if let Some(ref player) = self.hardware_player {
-                    if let Some(state) = player.execute_tick_sync() {
-                        self.is_playing = state.is_playing;
-                        self.current_time_ms = state.current_time_ms;
-                        self.active_text = state.active_text.clone();
-
-                        if self.navigation_tree_root.is_none() {
-                            self.load_and_cache_navigation_tree();
-                        }
-                        self.sync_active_chapter(state.current_time_ms);
-                        self.playback_state = Some(state);
-                    }
-                }
-            }
         }
+        self.render_lyrics_view(&sender.clone());
     }
 }
 
@@ -885,6 +988,126 @@ impl AudioBiblePage {
         if let Some(state) = self.engine.get_playback_state() {
             self.playback_state = Some(state.clone());
             self.sync_active_chapter(state.current_time_ms);
+        }
+    }
+
+    fn render_lyrics_view(&self, sender: &ComponentSender<Self>) {
+        let Some(lyrics_box) = &self.lyrics_box else {
+            return;
+        };
+        let Some(scrollview) = &self.lyrics_scrollview else {
+            return;
+        };
+
+        // Wipe previous layout allocations completely
+        while let Some(child) = lyrics_box.first_child() {
+            lyrics_box.remove(&child);
+        }
+
+        let clean_active = self.active_text.trim();
+        let mut target_active_widget: Option<gtk::Box> = None;
+
+        // 1. Loop through your top-level chapters
+        for chapter in &self.flattened_chapters_cache {
+            // Chapter Header text
+            let chapter_title = gtk::Label::builder()
+                .label(&chapter.title.to_uppercase())
+                .halign(gtk::Align::Start)
+                .build();
+            chapter_title.inline_css("font-family: monospace; font-size: 11px; font-weight: bold; color: rgba(255,255,255,0.2); margin-top: 14px;");
+            lyrics_box.append(&chapter_title);
+
+            // 2. Loop directly over the child verse nodes inside this chapter
+            if let children = &chapter.children {
+                for sentence_node in children {
+                    let current_verse_text = sentence_node.text.as_deref().unwrap_or("");
+
+                    // Whitespace verification matching logic
+                    let is_active =
+                        !clean_active.is_empty() && clean_active == current_verse_text.trim();
+
+                    // Container mimicking SwiftUI's inner layout stack
+                    let verse_container = gtk::Box::new(gtk::Orientation::Vertical, 6);
+                    verse_container.set_hexpand(true);
+
+                    // Verse Identifier (e.g. "Verse 1")
+                    let title_label = gtk::Label::builder()
+                        .label(&sentence_node.title)
+                        .halign(gtk::Align::Start)
+                        .build();
+                    title_label.inline_css(&format!(
+                        "font-family: sans-serif; font-size: 10px; font-weight: bold; color: {};",
+                        if is_active {
+                            "rgba(255, 140, 0, 0.9)"
+                        } else {
+                            "rgba(255,255,255,0.15)"
+                        }
+                    ));
+                    verse_container.append(&title_label);
+
+                    // Spoken Content Body
+                    let body_label = gtk::Label::builder()
+                        .label(current_verse_text)
+                        .wrap(true)
+                        .justify(gtk::Justification::Left)
+                        .halign(gtk::Align::Start)
+                        .build();
+                    body_label.inline_css(&format!(
+                        "font-family: serif; font-size: 23px; font-weight: 500; line-height: 1.6; color: {};",
+                        if is_active { "#ffffff" } else { "rgba(255,255,255,0.25)" }
+                    ));
+                    verse_container.append(&body_label);
+
+                    // Tap Navigation: Seek directly to the millisecond click target
+                    if let Some(timestamp_ms) = sentence_node.start_ms {
+                        let gesture = gtk::GestureClick::new();
+                        let sender_clone = sender.clone();
+
+                        gesture.connect_released(move |_, _, _, _| {
+                            sender_clone.input(AudioBibleInput::Seek(timestamp_ms));
+                        });
+                        verse_container.add_controller(gesture);
+                    }
+
+                    // Save a pointer layout frame for our auto-scrolling operation
+                    if is_active {
+                        target_active_widget = Some(verse_container.clone());
+                    }
+
+                    // Avoid child element click-blocking
+                    verse_container.set_can_target(false);
+                    lyrics_box.append(&verse_container);
+                }
+            }
+        }
+
+        // =========================================================================
+        // SCROLLVIEW READER SIMULATION: Center the active text in the viewport
+        // =========================================================================
+        if let Some(active_widget) = target_active_widget {
+            // 1. Extract and clone the inner widget handle out of the Option *before* moving it
+            if let scrollview_clone = scrollview.clone() {
+                // A short timeout yields context to GTK's layout loop to compute new sizes accurately
+                glib::timeout_add_local(std::time::Duration::from_millis(35), move || {
+                    let alloc = active_widget.allocation();
+                    let widget_y = alloc.y();
+                    let widget_height = alloc.height();
+
+                    // 2. Use the cloned handle safely inside the 'static closure
+                    if let v_adj = scrollview_clone.vadjustment() {
+                        let page_size = v_adj.page_size();
+
+                        // Core centering calculation matching anchor: .center
+                        let target_scroll_pos =
+                            (widget_y as f64) - (page_size / 2.0) + ((widget_height as f64) / 2.0);
+
+                        // Clamp bounds safely within scroll limits
+                        let max_scroll = v_adj.upper() - page_size;
+                        v_adj.set_value(target_scroll_pos.max(0.0).min(max_scroll));
+                    }
+                    glib::ControlFlow::Break
+                });
+            }
         }
     }
 }

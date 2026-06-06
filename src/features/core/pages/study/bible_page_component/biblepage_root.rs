@@ -75,9 +75,9 @@ impl Component for BiblePageRoot {
 
                     // Page 2: References
                     add_titled: (
-                        &gtk::Label::new(Some("Cross References")),
-                        Some("ref"),
-                        "References"
+                        &gtk::Label::new(Some("Lexicons")),
+                        Some("Lex"),
+                        "Lexicons"
                     ),
 
                     add_titled: (

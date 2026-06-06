@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::features::core::pages::audio_bible::audio_bible_page::AudioBibleOutput;
+use crate::features::core::pages::audio_bible::persistent_control::AudioPersistentControl;
 use crate::features::core::{
     components::sidebar::{NavigationPage, SideBar, SidebarMessage},
     pages::{
@@ -45,6 +46,8 @@ pub struct AppModel {
 
     is_sidebar_visible: bool,
     current_page_key: String,
+
+    persistent_player: Controller<AudioPersistentControl>,
 }
 
 #[derive(Debug)]
@@ -113,10 +116,15 @@ impl SimpleComponent for AppModel {
                         },
 
                         // Persistent Sub-View 3: Workspace layout
-                        add_named[Some("workspace")] = &adw::Bin {
-                            // 🌟 Your exact mapping lookup logic works here completely natively!
-                            #[watch]
-                            set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
+                       add_named[Some("workspace")] = &adw::Bin {
+                            gtk::Overlay {
+                                #[watch]
+                                set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
+                                add_overlay = model.persistent_player.widget() {
+                                    set_valign: gtk::Align::End,
+                                    set_halign: gtk::Align::Center,
+                                }
+                            }
                         },
 
                         // Track state modifications to flip active layout index targets smoothly
@@ -161,15 +169,22 @@ impl SimpleComponent for AppModel {
                 SidebarMessage::SelectPage(page) => AppInputMessage::SetContentPage(page),
             });
 
+        let audio_engine = Arc::new(AudioEngine::new());
+
+        let persistent_player = AudioPersistentControl::builder()
+            .launch(Some(audio_engine.clone())) // Pass engine reference down
+            .detach();
+
         let model = AppModel {
             side_bar,
             pages_cache: HashMap::new(),
             engine: None,
-            audio_engine: Arc::new(AudioEngine::new()),
+            audio_engine,
             is_engine_ready: false,
             engine_error: None,
             is_sidebar_visible: false,
             current_page_key: NavigationPage::Bible.to_key(),
+            persistent_player,
         };
 
         let sidebar_widget = model.side_bar.widget();

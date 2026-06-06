@@ -2,13 +2,12 @@ use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-// ===== ROOT LEVEL IMPORTS FOR RODIO 0.22.x =====
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player as RodioPlayer};
 
 use xbible_engine::engines::audio_engine::engine::{AudioEngine, PlaybackState};
 
 // =========================================================================
-// HARDWARE AUDIO WRAPPER CONTEXT (Swift AudioBiblePlayer Equivalent)
+// HARDWARE AUDIO WRAPPER CONTEXT
 // =========================================================================
 pub struct HardwareAudioPlayer {
     rust_engine: Arc<AudioEngine>,

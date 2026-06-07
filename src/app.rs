@@ -172,7 +172,7 @@ impl SimpleComponent for AppModel {
         let audio_engine = Arc::new(AudioEngine::new());
 
         let persistent_player = AudioPersistentControl::builder()
-            .launch(Some(audio_engine.clone())) // Pass engine reference down
+            .launch(audio_engine.clone()) // Pass engine reference down
             .detach();
 
         let model = AppModel {

@@ -1,28 +1,34 @@
 use adw::prelude::*;
-use relm4::prelude::*;
+use relm4::{WorkerController, prelude::*};
 use std::sync::Arc;
-use xbible_engine::engines::audio_engine::engine::{AudioEngine, PlaybackState};
+use xbible_engine::engines::audio_engine::engine::{AudioEngine, AudioModuleInfo, PlaybackState};
 
-// Assuming this lives globally in your application architecture
+use crate::features::core::pages::audio_bible::services::audio_player::service::{
+    AudioPlayerService, AudioServiceInput,
+};
+
 #[derive(Debug, Clone)]
 pub enum AppInputMessage {
+    HandleMetadataBroadcast(AudioModuleInfo),
+    SyncPlaybackState(Option<PlaybackState>),
     TogglePlayback,
     SkipForward,
     SkipBackward,
-    SyncPlaybackState(Option<PlaybackState>),
 }
 
 pub struct AudioPersistentControl {
-    engine: Option<Arc<AudioEngine>>,
+    engine: Arc<AudioEngine>,
     is_playing: bool,
     current_title: String,
     current_subtitle: String,
+    current_texture: Option<gtk::gdk::Texture>,
     progress_fraction: f64,
+    worker: WorkerController<AudioPlayerService>,
 }
 
 #[relm4::component(pub)]
 impl SimpleComponent for AudioPersistentControl {
-    type Init = Option<Arc<AudioEngine>>;
+    type Init = Arc<AudioEngine>;
     type Input = AppInputMessage;
     type Output = ();
 
@@ -35,11 +41,9 @@ impl SimpleComponent for AudioPersistentControl {
             set_margin_bottom: 24,
             set_spacing: 16,
 
-            // Rigid layout sizing specs matching the overlay canvas footprint
             set_width_request: 500,
             set_height_request: 68,
 
-            // Pinned premium structural glassmorphic treatment
             inline_css: "
                 background: rgba(18, 18, 18, 0.88);
                 backdrop-filter: blur(24px);
@@ -49,7 +53,7 @@ impl SimpleComponent for AudioPersistentControl {
                 box-shadow: 0px 16px 48px rgba(0,0,0,0.6);
             ",
 
-            // 1. LEFT PIECE: Metadata Node Details
+            // 1. LEFT PIECE: Metadata Details + Hi-DPI Scaled Picture Layout
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
                 set_spacing: 12,
@@ -57,16 +61,31 @@ impl SimpleComponent for AudioPersistentControl {
                 set_hexpand: true,
 
                 gtk::Box {
+                    set_halign: gtk::Align::Center,
+                    set_valign: gtk::Align::Center,
+                    add_css_class: "artwork-container",
+                    set_overflow: gtk::Overflow::Hidden,
+                    set_hexpand: false,
+                    set_vexpand: false,
                     set_width_request: 42,
                     set_height_request: 42,
-                    set_overflow: gtk::Overflow::Hidden,
-                    inline_css: "border-radius: 10px; background: rgba(255,255,255,0.06);",
+                    inline_css: "background: rgba(255,255,255,0.06); border-radius: 10px;",
 
-                    gtk::Image {
-                        set_icon_name: Some("audio-x-generic-symbolic"),
-                        set_pixel_size: 22,
-                        set_valign: gtk::Align::Center,
-                        set_halign: gtk::Align::Center,
+                    gtk::Picture {
+                        set_halign: gtk::Align::Fill,
+                        set_valign: gtk::Align::Fill,
+                        set_hexpand: false,
+                        set_vexpand: false,
+
+                        set_can_shrink: true,
+                        set_content_fit: gtk::ContentFit::Cover,
+
+                        // Constraint bounding box sizes for the UI layout canvas
+                        set_width_request: 50,
+                        set_height_request: 50,
+
+                        #[watch]
+                        set_paintable: model.current_texture.as_ref().map(|t| t.upcast_ref::<gtk::gdk::Paintable>()),
                     }
                 },
 
@@ -94,7 +113,7 @@ impl SimpleComponent for AudioPersistentControl {
                 }
             },
 
-            // 2. RIGHT PIECE: Tactical Control Operations Deck
+            // 2. RIGHT PIECE: Control Operations Deck
             gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
                 set_spacing: 6,
@@ -137,16 +156,47 @@ impl SimpleComponent for AudioPersistentControl {
     }
 
     fn init(
-        engine_context: Self::Init,
+        engine: Self::Init,
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let (view_sender, view_receiver) = async_channel::unbounded::<AudioServiceInput>();
+
+        let worker = AudioPlayerService::builder()
+            .detach_worker(engine.clone())
+            .forward(sender.input_sender(), |_| AppInputMessage::TogglePlayback);
+
+        let _ = worker
+            .sender()
+            .send(AudioServiceInput::RegisterView(view_sender));
+
+        let input_sender = sender.input_sender().clone();
+
+        // 🌟 FIX: Switched to thread_default context streaming allocation.
+        // This stops thread contextual acquisition races between foreground UI loops and your background engine.
+        glib::MainContext::ref_thread_default().spawn_local(async move {
+            while let Ok(msg) = view_receiver.recv().await {
+                match msg {
+                    AudioServiceInput::UpdateSelectedMetadata(module_info) => {
+                        let _ = input_sender
+                            .send(AppInputMessage::HandleMetadataBroadcast(module_info));
+                    }
+                    AudioServiceInput::SyncPlaybackState(state) => {
+                        let _ = input_sender.send(AppInputMessage::SyncPlaybackState(state));
+                    }
+                    _ => {}
+                }
+            }
+        });
+
         let model = Self {
-            engine: engine_context,
+            engine,
             is_playing: false,
             current_title: "No Selection".to_string(),
             current_subtitle: "Tap a module to play".to_string(),
+            current_texture: None,
             progress_fraction: 0.0,
+            worker,
         };
 
         let widgets = view_output!();
@@ -156,30 +206,76 @@ impl SimpleComponent for AudioPersistentControl {
 
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {
-            AppInputMessage::TogglePlayback => {
-                self.is_playing = !self.is_playing;
-                if let Some(ref audio_engine) = self.engine {
-                    // Route directly down into your Core Rust Audio Pipeline
-                    audio_engine.toggle_playback();
-                }
-            }
-            AppInputMessage::SkipForward => {
-                if let Some(ref audio_engine) = self.engine {
-                    audio_engine.skip_forward();
-                }
-            }
-            AppInputMessage::SkipBackward => {
-                if let Some(ref audio_engine) = self.engine {
-                    audio_engine.skip_backward();
-                }
-            }
             AppInputMessage::SyncPlaybackState(state) => {
                 if let Some(current_state) = state {
                     self.is_playing = current_state.is_playing;
-                    self.current_title = current_state.active_text.clone();
-                    self.current_subtitle = current_state.active_text;
-                    self.progress_fraction = current_state.active_anchor_index as f64; // e.g. 0.0 to 1.0
+
+                    if !current_state.active_text.is_empty() {
+                        self.current_subtitle = current_state.active_text;
+                    }
+
+                    self.progress_fraction = current_state.active_anchor_index as f64;
                 }
+            }
+
+            AppInputMessage::HandleMetadataBroadcast(module_info) => {
+                if let Some(bytes) = module_info.artwork.image_bytes() {
+                    let stream =
+                        gtk::gio::MemoryInputStream::from_bytes(&gtk::glib::Bytes::from(&bytes));
+
+                    // 🌟 FIX: Read the stream at a higher, super-sampled scale factor (e.g., 128x128).
+                    // This creates a dense pixel buffer map that won't look blurry on retina/high-DPI screens.
+                    match gtk::gdk_pixbuf::Pixbuf::from_stream_at_scale(
+                        &stream,
+                        50,
+                        50,
+                        true,
+                        gtk::gio::Cancellable::NONE,
+                    ) {
+                        Ok(pixbuf) => {
+                            self.current_texture = Some(gtk::gdk::Texture::for_pixbuf(&pixbuf));
+                        }
+                        Err(e) => {
+                            println!(
+                                "[AudioPersistentControl] Pixbuf texture conversion error: {}",
+                                e
+                            );
+                            self.current_texture = None;
+                        }
+                    }
+                } else {
+                    self.current_texture = None;
+                }
+
+                if let Some(ref metadata) = module_info.metadata {
+                    println!(
+                        "Player Control UI updating metadata layout for: {}",
+                        metadata.display_title
+                    );
+                    self.current_title = metadata.display_title.clone();
+                    self.current_subtitle = metadata.contributor.clone();
+                } else {
+                    self.current_title = module_info.file_name.clone();
+                    self.current_subtitle = "Local Module".to_string();
+                }
+                self.progress_fraction = 0.0;
+            }
+
+            AppInputMessage::TogglePlayback => {
+                if self.current_title == "No Selection" {
+                    let _ = self
+                        .worker
+                        .sender()
+                        .send(AudioServiceInput::SelectModule(0));
+                } else {
+                    let _ = self.worker.sender().send(AudioServiceInput::TogglePlayback);
+                }
+            }
+            AppInputMessage::SkipForward => {
+                let _ = self.worker.sender().send(AudioServiceInput::SkipForward);
+            }
+            AppInputMessage::SkipBackward => {
+                let _ = self.worker.sender().send(AudioServiceInput::SkipBackward);
             }
         }
     }

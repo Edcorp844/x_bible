@@ -28,7 +28,7 @@ use crate::features::core::display_configurations::config::TextConfig;
 
 pub struct BiblePage {
     pub(crate) engine: Arc<XBibleEngine>,
-    pub(crate) module: SwordModule,
+    pub(crate) module: Option<SwordModule>,
     pub(crate) sections: FactoryVecDeque<SectionModel>,
     pub(crate) config: TextConfig,
     pub(crate) customize_theme_popup: Option<Controller<CustomizeThemePopup>>,
@@ -37,8 +37,8 @@ pub struct BiblePage {
     pub(crate) pending_sections: VecDeque<Section>,
     pub(crate) total_sections_to_load: usize,
 
-    pub(crate) current_book: ModuleBook,
-    pub(crate) current_chapter: i32,
+    pub(crate) current_book: Option<ModuleBook>,
+    pub(crate) current_chapter: Option<i32>,
     pub(crate) is_loading: bool,
 }
 
@@ -103,7 +103,7 @@ impl Component for BiblePage {
                             set_child = &gtk::Box {
                                 set_spacing: 4,
                                 #[name = "version_label"]
-                                gtk::Label { set_label: &model.module.name },
+                                gtk::Label { set_label: model.module.as_ref().map(|m| m.name.as_str()).unwrap_or(""),},
                                 gtk::Image { set_icon_name: Some("pan-down-symbolic") },
                             },
 
@@ -184,7 +184,7 @@ impl Component for BiblePage {
                             set_child = &gtk::Box {
                                 set_spacing: 4,
                                 #[name = "book_label"]
-                                gtk::Label { set_label: &model.current_book.name },
+                                gtk::Label { set_label: model.current_book.as_ref().map(|b| b.name.as_str()).unwrap_or("")},
                                 gtk::Image { set_icon_name: Some("pan-down-symbolic") },
                             },
                         },
@@ -215,7 +215,7 @@ impl Component for BiblePage {
                             set_child = &gtk::Box {
                                 set_spacing: 4,
                                 #[name = "chapter_label"]
-                                gtk::Label { set_label: &format!("Chapter {}", model.current_chapter) },
+                               gtk::Label { set_label: &model.current_chapter.as_ref().map(|c| format!("Chapter {c}")).unwrap_or_default(),},
                                 gtk::Image { set_icon_name: Some("pan-down-symbolic") },
                             },
                         },
@@ -604,32 +604,26 @@ impl Component for BiblePage {
             eprintln!("No modules found. Please install a SWORD module.");
         }
 
-        let model = if let (Some(m), Some(b)) = (active_module, active_book) {
-            BiblePage {
-                engine,
-                module: m,
-                current_book: b,
-                current_chapter: active_chapter,
-                sections,
-                config: Arc::new(RwLock::new(PageDisplayConfig::new())),
-                customize_theme_popup: None,
-                annotations: AnnotationSettings::load_all(),
-                is_loading: false,
-                pending_sections: VecDeque::new(),
-                total_sections_to_load: 0,
-            }
-        } else {
-            // Return a 'Safe' or 'Empty' state model here
-            // instead of crashing with .expect()
-            panic!("XBible cannot start: No valid Bible modules found or module corrupted.");
+        let model = BiblePage {
+            engine,
+            module: active_module,
+            current_book: active_book,
+            current_chapter: Some(active_chapter),
+            sections,
+            config: Arc::new(RwLock::new(PageDisplayConfig::new())),
+            customize_theme_popup: None,
+            annotations: AnnotationSettings::load_all(),
+            is_loading: false,
+            pending_sections: VecDeque::new(),
+            total_sections_to_load: 0,
         };
 
         let widgets = view_output!();
 
         // 6. Populate UI Components
         Self::populate_version_grid(&widgets, &modules, sender.clone());
-        model.populate_book_grid(&widgets, &module_books, sender.clone());
-        model.populate_chapter_grid(&widgets, sender.clone(), chapter_count);
+        Self::populate_book_grid(&widgets, &module_books, sender.clone());
+        Self::populate_chapter_grid(&widgets, sender.clone(), chapter_count);
 
         // 7. Setup Overlay Animations
         let motion = gtk::EventControllerMotion::new();
@@ -677,10 +671,23 @@ impl Component for BiblePage {
             });
 
         widgets.overlay_container.add_controller(motion);
-        model.populate_fonts_container(&widgets.menu_fonts_container, sender.clone());
+        Self::populate_fonts_container(
+            &widgets.menu_fonts_container,
+            sender.clone(),
+            model.config.clone(),
+        );
 
         // Load initial reference
-        let initial_ref = format!("{} {}", model.current_book.name, model.current_chapter);
+
+        let book = match model.current_book.clone() {
+            Some(book) => book.name,
+            None => String::new(),
+        };
+        let chapter = match model.current_chapter {
+            Some(chapter) => chapter,
+            None => 1,
+        };
+        let initial_ref = format!("{} {}", book, chapter);
         sender.input(StudyInput::LoadReference(initial_ref));
 
         ComponentParts { model, widgets }
@@ -697,30 +704,46 @@ impl Component for BiblePage {
         match message {
             // --- ASYNC METADATA FLOW (No more engine calls here) ---
             StudyInput::SetModule(module) => {
-                self.module = module;
-                self.current_chapter = 1;
+                self.module = Some(module);
+                self.current_chapter = Some(1);
                 self.is_loading = true;
-                widgets.version_label.set_label(&self.module.name);
+                if let Some(ref module) = self.module {
+                    widgets.version_label.set_label(&module.name);
+                } else {
+                    widgets.version_label.set_label("");
+                }
 
                 // Load content for the selected module
-                let reference = format!("{} {}", self.current_book.name, self.current_chapter);
+                let reference = self
+                    .current_book
+                    .as_ref()
+                    .map(|book| format!("{} 1", book.name))
+                    .unwrap_or_default();
                 sender.input(StudyInput::LoadReference(reference));
             }
 
             StudyInput::SetBook(book) => {
-                self.current_book = book.clone();
-                self.current_chapter = 1;
+                self.current_book = Some(book.clone());
+                self.current_chapter = Some(1);
                 self.is_loading = true;
-                widgets.book_label.set_label(&self.current_book.name);
+                if let Some(ref book) = self.current_book {
+                    widgets.book_label.set_label(&book.name);
+                } else {
+                    widgets.book_label.set_label("");
+                }
                 widgets.chapter_label.set_label("Chapter 1");
 
                 // Load content for the selected book
-                let reference = format!("{} 1", self.current_book.name);
+                let reference = self
+                    .current_book
+                    .as_ref()
+                    .map(|book| format!("{} 1", book.name))
+                    .unwrap_or_default();
                 sender.input(StudyInput::LoadReference(reference));
             }
 
             StudyInput::SetChapter(chapter) => {
-                self.current_chapter = chapter;
+                self.current_chapter = Some(chapter);
                 widgets
                     .chapter_label
                     .set_label(&format!("Chapter {}", chapter));
@@ -728,7 +751,11 @@ impl Component for BiblePage {
                 self.is_loading = true;
 
                 // Load content for the selected chapter
-                let reference = format!("{} {}", self.current_book.name, chapter);
+                let reference = self
+                    .current_book
+                    .as_ref()
+                    .map(|book| format!("{} {}", book.name, chapter))
+                    .unwrap_or_default();
                 sender.input(StudyInput::LoadReference(reference));
             }
 
@@ -739,10 +766,10 @@ impl Component for BiblePage {
                 self.sections.guard().clear();
 
                 // Fetch sections from engine
-                let sections = self
-                    .engine
-                    .get_chapter_content(&self.module.name, &reference);
-                sender.input(StudyInput::ReferenceLoaded(sections));
+                if let Some(ref module) = self.module {
+                    let sections = self.engine.get_chapter_content(&module.name, &reference);
+                    sender.input(StudyInput::ReferenceLoaded(sections));
+                }
             }
 
             StudyInput::ReferenceLoaded(sections) => {
@@ -779,13 +806,15 @@ impl Component for BiblePage {
                 widgets.loading.set_visible(self.is_loading);
                 self.total_sections_to_load = 0;
                 // Attempt to find the book name from current state for saving
-                let book_name = self.current_book.name.clone();
-
-                BiblePageSettings::save(BiblePageState {
-                    last_module: Some(self.module.name.clone()),
-                    last_book: Some(book_name),
-                    last_chapter: Some(self.current_chapter),
-                });
+                if let (Some(module), Some(book)) =
+                    (self.module.as_ref(), self.current_book.as_ref())
+                {
+                    BiblePageSettings::save(BiblePageState {
+                        last_module: Some(module.name.clone()),
+                        last_book: Some(book.name.clone()),
+                        last_chapter: self.current_chapter,
+                    });
+                }
             }
 
             // --- THEME & POPUP LOGIC (UNCHANGED) ---

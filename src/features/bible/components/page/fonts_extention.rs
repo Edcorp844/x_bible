@@ -1,18 +1,18 @@
 use gtk::prelude::*;
 
-use crate::features::bible::components::page::{
+use crate::features::{bible::components::page::{
     biblepage_model::{BiblePage, StudyInput},
     helpers::AvailableFonts,
     verse_components::verse::VerseInputMessage,
-};
+}, core::display_configurations::config::TextConfig};
 
 impl BiblePage {
     pub fn font_menu_widget(
-        &self,
         font: AvailableFonts,
         sender: relm4::ComponentSender<Self>,
+        config: TextConfig
     ) -> gtk::Box {
-        let is_active = font == self.config.read().unwrap().font();
+        let is_active = font == config.read().unwrap().font();
         let name = font.to_string();
 
         let font_box = gtk::Box::builder()
@@ -44,16 +44,16 @@ impl BiblePage {
     }
 
     pub fn populate_fonts_container(
-        &self,
         container: &gtk::Box,
         sender: relm4::ComponentSender<Self>,
+        config: TextConfig,
     ) {
         while let Some(child) = container.first_child() {
             container.remove(&child);
         }
 
         for font in AvailableFonts::all() {
-            let widget = self.font_menu_widget(font, sender.clone());
+            let widget = Self::font_menu_widget(font, sender.clone(), config.clone());
             container.append(&widget);
         }
     }

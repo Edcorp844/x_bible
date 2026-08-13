@@ -93,7 +93,6 @@ impl BiblePage {
     }
 
     pub(crate) fn populate_book_grid(
-        &self,
         widgets: &BiblePageWidgets,
         books: &Vec<ModuleBook>,
         sender: ComponentSender<Self>,
@@ -191,7 +190,6 @@ impl BiblePage {
     }
 
     pub(crate) fn populate_chapter_grid(
-        &self,
         widgets: &BiblePageWidgets,
         sender: ComponentSender<Self>,
         count: i32, // Pass the count in directly

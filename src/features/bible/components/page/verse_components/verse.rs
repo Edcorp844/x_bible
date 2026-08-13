@@ -17,6 +17,7 @@ use crate::features::{
     core::display_configurations::config::TextConfig,
 };
 
+
 pub struct VerseModel {
     pub data: Verse,
     pub config: TextConfig,

@@ -11,6 +11,8 @@ use crate::features::{
     core::display_configurations::config::TextConfig,
 };
 
+
+#[derive(Debug, Clone)]
 pub struct WordModel {
     data: Word,
     config: TextConfig,

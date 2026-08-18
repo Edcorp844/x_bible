@@ -5,8 +5,8 @@ use std::time::Instant;
 use gtk::cairo;
 use gtk::glib;
 use gtk::prelude::*;
-use relm4::RelmSetChildExt;
 use relm4::prelude::*;
+use relm4::RelmSetChildExt;
 use relm4::{Component, ComponentParts, ComponentSender};
 
 use crate::features::bible::components::page::helpers::AddedWordStyle;
@@ -15,9 +15,10 @@ use crate::features::bible::components::page::verse_components::verse::VerseInpu
 use crate::features::core::display_configurations::config::TextConfig;
 
 // ---- Layout Constants ---------------------------------------------------
-const COLLAPSED: f64 = 64.0;
+const PILL_WIDTH: f64 = 140.0;
+const PILL_HEIGHT: f64 = 48.0;
 const MENU_WIDTH: i32 = 340;
-const SECTION_GAP: i32 = 8; // Reduced spacing between cards
+const SECTION_GAP: i32 = 8;
 
 const EXPAND_MS: f64 = 300.0;
 const COLLAPSE_MS: f64 = 200.0;
@@ -33,14 +34,17 @@ pub struct ExpandingThemeMenu {
     config: TextConfig,
     state: MenuState,
     progress: Rc<Cell<f64>>,
-    hovered: Rc<Cell<bool>>,
+    hovered_zone: Rc<Cell<Option<usize>>>,
+    pub has_prev: bool,
+    pub has_next: bool,
 }
 
 #[derive(Debug)]
 pub enum ThemeMenuInput {
     CanvasClicked { x: f64, y: f64 },
+    CanvasMotion { x: f64, y: f64 },
+    CanvasLeave,
     CloseClicked,
-    HoverChanged(bool),
     AnimDone(MenuState),
     OpenThemePopupClicked,
     FontSizeChanged(f64),
@@ -51,6 +55,7 @@ pub enum ThemeMenuInput {
     ToggleLemma(bool),
     ToggleMorph(bool),
     AddedWordsStyleChanged(String),
+    SetNavigationState { has_prev: bool, has_next: bool },
 }
 
 #[derive(Debug)]
@@ -58,6 +63,8 @@ pub enum ThemeMenuOutput {
     OpenThemePopup,
     ToggleDisplay(VerseInputMessage),
     DimBackground(bool),
+    PreviousChapter,
+    NextChapter,
 }
 
 pub struct ThemeMenuWidgets {
@@ -86,40 +93,58 @@ impl Component for ExpandingThemeMenu {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let progress = Rc::new(Cell::new(0.0_f64));
-        let hovered = Rc::new(Cell::new(false));
+        let hovered_zone = Rc::new(Cell::new(None));
+
+        let model = Self {
+            config: init.clone(),
+            state: MenuState::Collapsed,
+            progress: progress.clone(),
+            hovered_zone: hovered_zone.clone(),
+            has_prev: true,
+            has_next: true,
+        };
 
         let canvas = gtk::DrawingArea::new();
-        canvas.set_width_request(COLLAPSED as i32);
-        canvas.set_height_request(COLLAPSED as i32);
+        canvas.set_width_request(PILL_WIDTH as i32);
+        canvas.set_height_request(PILL_HEIGHT as i32);
         canvas.set_halign(gtk::Align::End);
         canvas.set_valign(gtk::Align::End);
 
         {
             let progress = progress.clone();
-            let hovered = hovered.clone();
-            canvas.set_draw_func(move |_area, cr, w, h| {
-                draw_collapsed_button(cr, w as f64, h as f64, progress.get(), hovered.get());
+            let hovered_zone = hovered_zone.clone();
+            canvas.set_draw_func(move |area, cr, w, h| {
+                // Read model dynamic states implicitly via closure scope
+                draw_pill_toolbar(
+                    cr,
+                    w as f64,
+                    h as f64,
+                    progress.get(),
+                    hovered_zone.get(),
+                    true,
+                    true,
+                );
             });
         }
 
         let click = gtk::GestureClick::new();
         {
-            let sender = sender.clone();
+            let gesture_sender = sender.clone();
             click.connect_released(move |g, _n, x, y| {
                 g.set_state(gtk::EventSequenceState::Claimed);
-                sender.input(ThemeMenuInput::CanvasClicked { x, y });
+                gesture_sender.input(ThemeMenuInput::CanvasClicked { x, y });
             });
         }
         canvas.add_controller(click);
 
         let motion = gtk::EventControllerMotion::new();
         {
-            let sender = sender.clone();
-            motion.connect_enter(move |_, _, _| sender.input(ThemeMenuInput::HoverChanged(true)));
-        }
-        {
-            let sender = sender.clone();
-            motion.connect_leave(move |_| sender.input(ThemeMenuInput::HoverChanged(false)));
+            let event_sender = sender.clone();
+            motion.connect_motion(move |_, x, y| {
+                event_sender.input(ThemeMenuInput::CanvasMotion { x, y })
+            });
+            let canvas_sender = sender.clone();
+            motion.connect_leave(move |_| canvas_sender.input(ThemeMenuInput::CanvasLeave));
         }
         canvas.add_controller(motion);
 
@@ -133,13 +158,6 @@ impl Component for ExpandingThemeMenu {
         content.set_can_target(false);
         root.add_overlay(&content);
 
-        let model = Self {
-            config: init,
-            state: MenuState::Collapsed,
-            progress,
-            hovered,
-        };
-
         let widgets = ThemeMenuWidgets { canvas, content };
         ComponentParts { model, widgets }
     }
@@ -152,25 +170,50 @@ impl Component for ExpandingThemeMenu {
         _root: &Self::Root,
     ) {
         match message {
-            ThemeMenuInput::HoverChanged(v) => {
-                self.hovered.set(v);
+            ThemeMenuInput::CanvasMotion { x, y: _ } => {
+                let zone_w = PILL_WIDTH / 3.0;
+                let zone = if x < zone_w {
+                    if self.has_prev { Some(0) } else { None }
+                } else if x < zone_w * 2.0 {
+                    Some(1)
+                } else {
+                    if self.has_next { Some(2) } else { None }
+                };
+                self.hovered_zone.set(zone);
                 widgets.canvas.queue_draw();
             }
 
-            ThemeMenuInput::CanvasClicked { .. } => {
-                if self.state == MenuState::Collapsed {
-                    self.state = MenuState::Animating;
-                    widgets.content.set_visible(true);
+            ThemeMenuInput::CanvasLeave => {
+                self.hovered_zone.set(None);
+                widgets.canvas.queue_draw();
+            }
 
-                    animate(
-                        &widgets.canvas,
-                        &self.progress,
-                        1.0,
-                        EXPAND_MS,
-                        ease_out_back,
-                        sender.clone(),
-                        MenuState::Expanded,
-                    );
+            ThemeMenuInput::CanvasClicked { x, y: _ } => {
+                if self.state == MenuState::Collapsed {
+                    let zone_w = PILL_WIDTH / 3.0;
+                    if x < zone_w {
+                        if self.has_prev {
+                            let _ = sender.output(ThemeMenuOutput::PreviousChapter);
+                        }
+                    } else if x > zone_w * 2.0 {
+                        if self.has_next {
+                            let _ = sender.output(ThemeMenuOutput::NextChapter);
+                        }
+                    } else {
+                        // Center Button: Expand Menu
+                        self.state = MenuState::Animating;
+                        widgets.content.set_visible(true);
+
+                        animate(
+                            &widgets.canvas,
+                            &self.progress,
+                            1.0,
+                            EXPAND_MS,
+                            ease_out_back,
+                            sender.clone(),
+                            MenuState::Expanded,
+                        );
+                    }
                 }
             }
 
@@ -228,6 +271,12 @@ impl Component for ExpandingThemeMenu {
                 let _ = sender.output(ThemeMenuOutput::ToggleDisplay(msg));
             }
 
+            ThemeMenuInput::SetNavigationState { has_prev, has_next } => {
+                self.has_prev = has_prev;
+                self.has_next = has_next;
+                widgets.canvas.queue_draw();
+            }
+
             ThemeMenuInput::ToggleStrongs(_active) => {}
             ThemeMenuInput::ToggleLemma(_active) => {}
             ThemeMenuInput::ToggleMorph(_active) => {}
@@ -238,37 +287,162 @@ impl Component for ExpandingThemeMenu {
         widgets.content.set_opacity(p);
 
         widgets.canvas.set_visible(p < 0.99);
+
+        // Update custom dynamic draw callback with current sensitivity states
+        let progress = self.progress.clone();
+        let hovered_zone = self.hovered_zone.clone();
+        let has_prev = self.has_prev;
+        let has_next = self.has_next;
+
+        widgets.canvas.set_draw_func(move |_area, cr, w, h| {
+            draw_pill_toolbar(
+                cr,
+                w as f64,
+                h as f64,
+                progress.get(),
+                hovered_zone.get(),
+                has_prev,
+                has_next,
+            );
+        });
+
         widgets.canvas.queue_draw();
     }
 }
 
-// ---- Collapsed Button Indicator -------------------------------------------
+// ---- Pill Toolbar Renderer --------------------------------------------------
 
-fn draw_collapsed_button(cr: &cairo::Context, w: f64, h: f64, p: f64, hovered: bool) {
+fn draw_pill_toolbar(
+    cr: &cairo::Context,
+    w: f64,
+    h: f64,
+    p: f64,
+    hovered_zone: Option<usize>,
+    has_prev: bool,
+    has_next: bool,
+) {
     if p >= 0.99 {
         return;
     }
 
-    let alpha = if hovered { 0.7 } else { 0.5 };
-    let radius = COLLAPSED / 2.0;
+    let alpha = 1.0 - p;
+    let radius = h / 2.0;
 
-    cr.arc(w / 2.0, h / 2.0, radius, 0.0, std::f64::consts::TAU);
-    cr.set_source_rgba(0.08, 0.09, 0.11, alpha * (1.0 - p));
+    // Draw Pill Background Shape
+    cr.new_sub_path();
+    cr.arc(
+        w - radius,
+        radius,
+        radius,
+        -std::f64::consts::FRAC_PI_2,
+        std::f64::consts::FRAC_PI_2,
+    );
+    cr.arc(
+        radius,
+        radius,
+        radius,
+        std::f64::consts::FRAC_PI_2,
+        3.0 * std::f64::consts::FRAC_PI_2,
+    );
+    cr.close_path();
+
+    cr.set_source_rgba(0.08, 0.09, 0.11, 0.85 * alpha);
     let _ = cr.fill_preserve();
 
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.1 * (1.0 - p));
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.12 * alpha);
     cr.set_line_width(1.0);
     let _ = cr.stroke();
 
-    let cx = w / 2.0;
-    let cy = h / 2.0;
-    cr.set_source_rgba(1.0, 1.0, 1.0, 1.0 - p);
-    cr.set_line_width(2.0);
-    for i in 0..3 {
-        let yy = cy - 8.0 + i as f64 * 8.0;
-        cr.move_to(cx - 10.0, yy);
-        cr.line_to(cx + 10.0, yy);
+    // Hover Highlight Overlays
+    if let Some(zone) = hovered_zone {
+        let zone_w = w / 3.0;
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.08 * alpha);
+        match zone {
+            0 if has_prev => {
+                // Left Zone Highlight
+                cr.arc(
+                    radius,
+                    radius,
+                    radius,
+                    std::f64::consts::FRAC_PI_2,
+                    3.0 * std::f64::consts::FRAC_PI_2,
+                );
+                cr.line_to(zone_w, 0.0);
+                cr.line_to(zone_w, h);
+                cr.close_path();
+                let _ = cr.fill();
+            }
+            1 => {
+                // Middle Zone Highlight
+                cr.rectangle(zone_w, 0.0, zone_w, h);
+                let _ = cr.fill();
+            }
+            2 if has_next => {
+                // Right Zone Highlight
+                cr.move_to(w - zone_w, 0.0);
+                cr.arc(
+                    w - radius,
+                    radius,
+                    radius,
+                    -std::f64::consts::FRAC_PI_2,
+                    std::f64::consts::FRAC_PI_2,
+                );
+                cr.line_to(w - zone_w, h);
+                cr.close_path();
+                let _ = cr.fill();
+            }
+            _ => {}
+        }
     }
+
+    // Dividers
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.15 * alpha);
+    cr.set_line_width(1.0);
+
+    cr.move_to(w / 3.0, 10.0);
+    cr.line_to(w / 3.0, h - 10.0);
+
+    cr.move_to(2.0 * w / 3.0, 10.0);
+    cr.line_to(2.0 * w / 3.0, h - 10.0);
+    let _ = cr.stroke();
+
+    // Icons Setup
+    cr.set_line_width(2.0);
+
+    // 1. Left Arrow (<)
+    let left_cx = w / 6.0;
+    let cy = h / 2.0;
+    let left_alpha = if has_prev { alpha } else { alpha * 0.25 };
+    cr.set_source_rgba(1.0, 1.0, 1.0, left_alpha);
+
+    cr.move_to(left_cx + 3.0, cy - 6.0);
+    cr.line_to(left_cx - 3.0, cy);
+    cr.line_to(left_cx + 3.0, cy + 6.0);
+    let _ = cr.stroke();
+
+    // 2. Middle Icon (Slats/Menu - Left aligned with shorter middle line)
+    cr.set_source_rgba(1.0, 1.0, 1.0, alpha);
+    let mid_cx = w / 2.0;
+    cr.set_line_cap(cairo::LineCap::Round);
+
+    for i in 0..3 {
+        let yy = cy - 6.0 + i as f64 * 6.0;
+        let start_x = mid_cx - 7.0;
+        let end_x = if i == 1 { mid_cx + 2.0 } else { mid_cx + 7.0 };
+
+        cr.move_to(start_x, yy);
+        cr.line_to(end_x, yy);
+    }
+    let _ = cr.stroke();
+
+    // 3. Right Arrow (>)
+    let right_cx = 5.0 * w / 6.0;
+    let right_alpha = if has_next { alpha } else { alpha * 0.25 };
+    cr.set_source_rgba(1.0, 1.0, 1.0, right_alpha);
+
+    cr.move_to(right_cx - 3.0, cy - 6.0);
+    cr.line_to(right_cx + 3.0, cy);
+    cr.line_to(right_cx - 3.0, cy + 6.0);
     let _ = cr.stroke();
 }
 
@@ -310,7 +484,7 @@ fn ease_in(t: f64) -> f64 {
     t * t
 }
 
-// ---- Layout Construction (Auto-Fitting Cards) ------------------------------
+// ---- Layout Construction (Content Overlay) ----------------------------------
 
 fn build_card_container() -> gtk::Box {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -361,7 +535,6 @@ fn build_content_box(
     // ==========================================
     let top_card = build_card_container();
 
-    // Top Header Row with Title + Close Button
     let header_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
     let title = gtk::Label::new(Some("Theme and Font"));
@@ -370,7 +543,6 @@ fn build_content_box(
     title.set_xalign(0.0);
 
     let close_btn = gtk::Button::from_icon_name("window-close-symbolic");
-    //close_btn.add_css_class("flat");
     close_btn.add_css_class("close-btn");
     {
         let sender = sender.clone();
@@ -409,7 +581,6 @@ fn build_content_box(
     slider_box.append(&big_a);
     top_card.append(&slider_box);
 
-    //Fonts
     let fonts_header = gtk::Label::new(Some("Fonts"));
     fonts_header.add_css_class("title-4");
     fonts_header.set_xalign(0.0);
@@ -424,14 +595,7 @@ fn build_content_box(
 
     let fonts_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
 
-    // Populate font widgets dynamically using your exact helper
-    // BiblePage::populate_fonts_container(&fonts_box, sender.clone(), config.clone());
-    while let Some(child) = fonts_box.first_child() {
-        fonts_box.remove(&child);
-    }
-
     for font in AvailableFonts::all() {
-        //let widget = Self::font_menu_widget(font, sender.clone(), config.clone());
         let is_active = font == config.read().unwrap().font();
         let name = font.to_string();
 

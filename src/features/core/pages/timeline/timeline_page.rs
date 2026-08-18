@@ -4,23 +4,23 @@ use adw::prelude::*;
 use relm4::{Component, ComponentParts};
 use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
 
-pub struct StorePage {
+pub struct TimelinePage {
     pub(crate) engine: Arc<XBibleEngine>,
 }
 
 #[derive(Clone, Debug)]
-pub enum StorePageInput {}
+pub enum TimelinePageInput {}
 
 #[derive(Clone, Debug)]
-pub enum StorePageOutput {
+pub enum TimelinePageOutput {
     ToggleSidebar,
 }
 
 #[relm4::component(pub)]
-impl Component for StorePage {
+impl Component for TimelinePage {
     type Init = Arc<XBibleEngine>;
-    type Input = StorePageInput ;
-    type Output = StorePageOutput;
+    type Input = TimelinePageInput;
+    type Output = TimelinePageOutput;
     type CommandOutput = ();
 
     fn init(
@@ -28,7 +28,9 @@ impl Component for StorePage {
         root: Self::Root,
         sender: relm4::prelude::ComponentSender<Self>,
     ) -> relm4::prelude::ComponentParts<Self> {
-        let model = StorePage { engine };
+        let model = TimelinePage { engine };
+
+        //let timeline = TimelineData::new();
 
         let widgets = view_output!();
 
@@ -52,7 +54,7 @@ impl Component for StorePage {
                         pack_start = &gtk::ToggleButton {
                             set_icon_name: "sidebar-show-symbolic",
                             connect_clicked[sender] => move |_| {
-                                let _ = sender.output(StorePageOutput::ToggleSidebar);
+                                let _ = sender.output(TimelinePageOutput::ToggleSidebar);
                             }
                         }
                     },

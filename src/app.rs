@@ -1,6 +1,7 @@
 use ::xbible_engine::engines::{
     audio_engine::engine::AudioEngine, xbible_engine::engine::XBibleEngine,
 };
+
 use adw::prelude::*;
 use relm4::prelude::*;
 use std::fmt::Debug;
@@ -8,6 +9,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::features::core::pages::audio_bible::audio_bible_page::AudioBibleOutput;
 use crate::features::core::pages::audio_bible::persistent_control::AudioPersistentControl;
+use crate::features::core::pages::store::store_page::{StorePage, StorePageOutput};
+use crate::features::core::pages::timeline::timeline_page::{TimelinePage, TimelinePageOutput};
 use crate::features::core::{
     components::sidebar::{NavigationPage, SideBar, SidebarMessage},
     pages::{
@@ -20,8 +23,9 @@ use crate::features::core::{
 enum PageController {
     Bible(Controller<StudyPage>),
     AudioBible(Controller<AudioBiblePage>),
-    //Store(Controller<StudyPage>),
+    Store(Controller<StorePage>),
     Library(Controller<LibraryPage>),
+    TimeLine(Controller<TimelinePage>),
 }
 
 impl PageController {
@@ -29,8 +33,9 @@ impl PageController {
         match self {
             Self::Bible(c) => c.widget(),
             Self::AudioBible(c) => c.widget(),
-            // Self::Store(c) => c.widget(),
+            Self::Store(c) => c.widget(),
             Self::Library(c) => c.widget(),
+            Self::TimeLine(c) => c.widget(),
         }
     }
 }
@@ -121,7 +126,7 @@ impl SimpleComponent for AppModel {
                                 #[watch]
                                 set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
                                 add_overlay = model.persistent_player.widget() {
-                                    set_valign: gtk::Align::End,
+                                    set_valign: gtk::Align::Start,
                                     set_halign: gtk::Align::Center,
                                 }
                             }
@@ -245,6 +250,31 @@ impl SimpleComponent for AppModel {
                             );
                             self.pages_cache.insert(key.clone(), bible_page);
                         }
+                        NavigationPage::Store => {
+                            let store_page = PageController::Store(
+                                StorePage::builder().launch(active_engine.clone()).forward(
+                                    sender.input_sender(),
+                                    |msg| match msg {
+                                        StorePageOutput::ToggleSidebar => {
+                                            AppInputMessage::ToggleSidebar
+                                        }
+                                    },
+                                ),
+                            );
+                            self.pages_cache.insert(key.clone(), store_page);
+                        }
+                        NavigationPage::Timeline => {
+                            let timeline_page = PageController::TimeLine(
+                                TimelinePage::builder()
+                                    .launch(active_engine.clone())
+                                    .forward(sender.input_sender(), |msg| match msg {
+                                        TimelinePageOutput::ToggleSidebar => {
+                                            AppInputMessage::ToggleSidebar
+                                        }
+                                    }),
+                            );
+                            self.pages_cache.insert(key.clone(), timeline_page);
+                        }
                         NavigationPage::AudioBible => {
                             let audio_page = PageController::AudioBible(
                                 AudioBiblePage::builder()
@@ -272,7 +302,6 @@ impl SimpleComponent for AppModel {
                             self.pages_cache
                                 .insert(key.clone(), PageController::Library(library_page));
                         }
-                        NavigationPage::Store => {}
                     }
                 }
 

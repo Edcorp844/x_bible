@@ -10,6 +10,7 @@ const STYLE_CSS_LIGHT: &str = include_str!("../data/style/light/style.css");
 const STYLE_CSS_DARK: &str = include_str!("../data/style/dark/style.css");
 
 fn main() {
+    xbible_engine::init_logging();
     // --------registerApplication Menu
     AppMenu::register();
 

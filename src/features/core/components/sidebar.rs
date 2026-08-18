@@ -1,4 +1,5 @@
 use adw::prelude::*;
+use gtk::ListBox;
 use relm4::{Component, ComponentParts, prelude::*};
 
 #[derive(Debug)]
@@ -7,6 +8,7 @@ pub enum NavigationPage {
     AudioBible,
     Library(String),
     Store,
+    Timeline,
 }
 
 impl NavigationPage {
@@ -92,7 +94,6 @@ impl Component for SideBar {
 
                             menu
                         })) {
-                            // 4. THE ACTUAL CIRCLES: Add the widget and link it to the "appearance" ID
                             add_child:(&{
                                 let container = gtk::Box::builder()
                                     .orientation(gtk::Orientation::Horizontal)
@@ -134,8 +135,6 @@ impl Component for SideBar {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 8,
 
-
-
                          gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 8,
@@ -143,10 +142,9 @@ impl Component for SideBar {
 
                             #[name = "pages"]
                             gtk::ListBox {
-                                    // Start with None to prevent auto-selection during population
-                                    set_selection_mode: gtk::SelectionMode::None,
-                                    set_margin_horizontal: 12,
-                                    add_css_class: "navigation-sidebar"
+                                set_selection_mode: gtk::SelectionMode::None,
+                                set_margin_horizontal: 12,
+                                add_css_class: "navigation-sidebar"
                             }
                         },
 
@@ -169,7 +167,6 @@ impl Component for SideBar {
                             set_reveal_child: true,
                             #[name = "tools_listbox"]
                             gtk::ListBox {
-                                // Start with None to prevent auto-selection during population
                                 set_selection_mode: gtk::SelectionMode::None,
                                 set_margin_horizontal: 12,
                                 add_css_class: "navigation-sidebar"
@@ -195,7 +192,6 @@ impl Component for SideBar {
                             set_reveal_child: true,
                             #[name = "library"]
                             gtk::ListBox {
-                                // Start with None to prevent auto-selection during population
                                 set_selection_mode: gtk::SelectionMode::None,
                                 set_margin_horizontal: 12,
                                 add_css_class: "navigation-sidebar"
@@ -217,6 +213,13 @@ impl Component for SideBar {
 
         let widgets = view_output!();
 
+        // Setup collapsible sections for both Tools and Library
+        Self::setup_collapsible_section(
+            &widgets.tools_header,
+            &widgets.tools_revealer,
+            &widgets.tools_chevron,
+        );
+
         Self::setup_collapsible_section(
             &widgets.library_header,
             &widgets.library_revealer,
@@ -224,16 +227,18 @@ impl Component for SideBar {
         );
 
         Self::render_pages_list(&widgets, &sender);
+        Self::render_tools_list(&widgets, &sender);
         Self::render_library_list(&widgets, &sender);
 
+        widgets.tools_listbox.set_can_focus(false);
         widgets.library.set_can_focus(false);
         widgets.pages.set_can_focus(false);
 
-        widgets
-            .library
-            .set_selection_mode(gtk::SelectionMode::Single);
+        widgets.tools_listbox.set_selection_mode(gtk::SelectionMode::Single);
+        widgets.library.set_selection_mode(gtk::SelectionMode::Single);
         widgets.pages.set_selection_mode(gtk::SelectionMode::Single);
 
+        widgets.tools_listbox.unselect_all();
         widgets.library.unselect_all();
         widgets.pages.unselect_all();
 
@@ -258,55 +263,63 @@ impl SideBar {
             ("my-store-symbolic", "Store"),
         ];
 
-        for (icon_name, label_text) in items {
-            let row_box = gtk::Box::builder()
-                .spacing(16)
-                .css_classes(vec!["Category"])
-                .build();
+        Self::populate_list(&items, listbox);
 
-            let icon = gtk::Image::from_icon_name(icon_name);
-            icon.set_pixel_size(22);
-            icon.set_margin_start(8);
-            icon.add_css_class("sidebar_icon");
-
-            let label = gtk::Label::builder()
-                .label(label_text)
-                .css_classes(vec!["sidebar-label"])
-                .build();
-
-            row_box.append(&icon);
-            row_box.append(&label);
-
-            let row = gtk::ListBoxRow::builder()
-                .name(label_text)
-                .child(&row_box)
-                .margin_end(0)
-                .margin_start(0)
-                .build();
-
-            listbox.append(&row);
-        }
-
+        let tools_listbox = &widgets.tools_listbox;
         let library = widgets.library.clone();
+        let tools_lb_clone = tools_listbox.clone();
 
         let sender_clone = sender.clone();
         listbox.connect_row_activated(move |_, row| {
+            tools_lb_clone.unselect_all();
             library.unselect_all();
 
-            if row.widget_name().as_str() == "Study" {
-                let _ = sender_clone
-                    .output_sender()
-                    .send(SidebarMessage::SelectPage(NavigationPage::Bible));
+            let name = row.widget_name();
+            match name.as_str() {
+                "Study" => {
+                    let _ = sender_clone
+                        .output_sender()
+                        .send(SidebarMessage::SelectPage(NavigationPage::Bible));
+                }
+                "Audio Bible" => {
+                    let _ = sender_clone
+                        .output_sender()
+                        .send(SidebarMessage::SelectPage(NavigationPage::AudioBible));
+                }
+                "Store" => {
+                    let _ = sender_clone
+                        .output_sender()
+                        .send(SidebarMessage::SelectPage(NavigationPage::Store));
+                }
+                _ => {}
             }
-            if row.widget_name().as_str() == "Audio Bible" {
+
+            let _ = sender_clone
+                .output_sender()
+                .send(SidebarMessage::ToggleSidebar);
+        });
+    }
+
+    fn render_tools_list(widgets: &SideBarWidgets, sender: &ComponentSender<Self>) {
+        let listbox = &widgets.tools_listbox;
+        let items = [
+            ("commentaries-symbolic", "Bible Timeline"),
+        ];
+        Self::populate_list(&items, listbox);
+
+        let pages = widgets.pages.clone();
+        let library = widgets.library.clone();
+        let sender_clone = sender.clone();
+
+        listbox.connect_row_activated(move |_, row| {
+            pages.unselect_all();
+            library.unselect_all();
+
+            let name = row.widget_name();
+            if name.as_str() == "Bible Timeline" {
                 let _ = sender_clone
                     .output_sender()
-                    .send(SidebarMessage::SelectPage(NavigationPage::AudioBible));
-            }
-            if row.widget_name().as_str() == "Store" {
-                let _ = sender_clone
-                    .output_sender()
-                    .send(SidebarMessage::SelectPage(NavigationPage::Store));
+                    .send(SidebarMessage::SelectPage(NavigationPage::Timeline));
             }
 
             let _ = sender_clone
@@ -325,41 +338,15 @@ impl SideBar {
             ("map-symbolic", "Maps"),
             ("books-symbolic", "General Books"),
         ];
-
-        for (icon_name, label_text) in items {
-            let row_box = gtk::Box::builder()
-                .spacing(16)
-                .css_classes(vec!["Category"])
-                .build();
-
-            let icon = gtk::Image::from_icon_name(icon_name);
-            icon.set_pixel_size(22);
-            icon.set_margin_start(8);
-            icon.add_css_class("sidebar_icon");
-
-            let label = gtk::Label::builder()
-                .label(label_text)
-                .css_classes(vec!["sidebar-label"])
-                .build();
-
-            row_box.append(&icon);
-            row_box.append(&label);
-
-            let row = gtk::ListBoxRow::builder()
-                .name(label_text)
-                .child(&row_box)
-                .margin_end(0)
-                .margin_start(0)
-                .build();
-
-            listbox.append(&row);
-        }
+        Self::populate_list(&items, listbox);
 
         let pages = widgets.pages.clone();
-
+        let tools_listbox = widgets.tools_listbox.clone();
         let sender_clone = sender.clone();
+
         listbox.connect_row_activated(move |_, row| {
             pages.unselect_all();
+            tools_listbox.unselect_all();
 
             let _ = sender_clone
                 .output_sender()
@@ -391,5 +378,36 @@ impl SideBar {
             }));
         });
         header.add_controller(gesture);
+    }
+
+    fn populate_list(items: &[(&str, &str)], listbox: &ListBox) {
+        for (icon_name, label_text) in items {
+            let row_box = gtk::Box::builder()
+                .spacing(16)
+                .css_classes(vec!["Category"])
+                .build();
+
+            let icon = gtk::Image::from_icon_name(icon_name);
+            icon.set_pixel_size(22);
+            icon.set_margin_start(8);
+            icon.add_css_class("sidebar_icon");
+
+            let label = gtk::Label::builder()
+                .label(*label_text)
+                .css_classes(vec!["sidebar-label"])
+                .build();
+
+            row_box.append(&icon);
+            row_box.append(&label);
+
+            let row = gtk::ListBoxRow::builder()
+                .name(*label_text)
+                .child(&row_box)
+                .margin_end(0)
+                .margin_start(0)
+                .build();
+
+            listbox.append(&row);
+        }
     }
 }

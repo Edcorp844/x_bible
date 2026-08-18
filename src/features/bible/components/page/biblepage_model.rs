@@ -24,6 +24,7 @@ use crate::features::bible::components::page::verse_components::verse_annotation
 use crate::features::bible::components::page_theme::customize_theme_popup::{
     CustomizeThemeOutput, CustomizeThemePopup,
 };
+use crate::features::bible::components::page_theme::theme_button::{ExpandingThemeMenu, ThemeMenuOutput};
 use crate::features::core::display_configurations::config::TextConfig;
 
 pub struct BiblePage {
@@ -40,6 +41,7 @@ pub struct BiblePage {
     pub(crate) current_book: Option<ModuleBook>,
     pub(crate) current_chapter: Option<i32>,
     pub(crate) is_loading: bool,
+    pub(crate) expanding_theme_menu: Controller<ExpandingThemeMenu>,
 }
 
 #[derive(Debug)]
@@ -250,6 +252,7 @@ impl Component for BiblePage {
                       set_visible: false,
                       set_can_target: false,
                   },
+
 
                   #[name = "overlay_container"]
                   add_overlay = &gtk::Box {
@@ -544,6 +547,9 @@ impl Component for BiblePage {
                           }
                       }
                   }
+
+                  , add_overlay = model.expanding_theme_menu.widget(),
+
                 }
             }
         }
@@ -603,19 +609,26 @@ impl Component for BiblePage {
         if active_module.is_none() {
             eprintln!("No modules found. Please install a SWORD module.");
         }
-
+        let config = Arc::new(RwLock::new(PageDisplayConfig::new()));
         let model = BiblePage {
             engine,
             module: active_module,
             current_book: active_book,
             current_chapter: Some(active_chapter),
             sections,
-            config: Arc::new(RwLock::new(PageDisplayConfig::new())),
+            config: config.clone(),
             customize_theme_popup: None,
             annotations: AnnotationSettings::load_all(),
             is_loading: false,
             pending_sections: VecDeque::new(),
             total_sections_to_load: 0,
+            expanding_theme_menu: ExpandingThemeMenu::builder().launch(config).forward(
+                sender.input_sender(),
+                |output| match output {
+                    ThemeMenuOutput::OpenThemePopup => StudyInput::OpenCustomizethemePopup,
+                    ThemeMenuOutput::ToggleDisplay(msg) => StudyInput::ToggleDisplay(msg),
+                },
+            ),
         };
 
         let widgets = view_output!();

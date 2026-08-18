@@ -1,5 +1,4 @@
 use adw::prelude::*;
-use gtk::glib::clone;
 use relm4::{ prelude::*};
 use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery;
 use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_module_content_ext::Section;
@@ -12,7 +11,7 @@ use std::sync::{Arc, RwLock};
 use crate::features::bible::components::page::biblepage_settings::{
     BiblePageSettings, BiblePageState,
 };
-use crate::features::bible::components::page::helpers::{AddedWordStyle, PageDisplayConfig};
+use crate::features::bible::components::page::helpers::PageDisplayConfig;
 use crate::features::bible::components::page::section::{
     SectionInput, SectionModel, SectionOutput,
 };
@@ -24,7 +23,9 @@ use crate::features::bible::components::page::verse_components::verse_annotation
 use crate::features::bible::components::page_theme::customize_theme_popup::{
     CustomizeThemeOutput, CustomizeThemePopup,
 };
-use crate::features::bible::components::page_theme::theme_button::{ExpandingThemeMenu, ThemeMenuOutput};
+use crate::features::bible::components::page_theme::theme_button::{
+    ExpandingThemeMenu, ThemeMenuOutput,
+};
 use crate::features::core::display_configurations::config::TextConfig;
 
 pub struct BiblePage {
@@ -57,6 +58,7 @@ pub enum StudyInput {
     FinishedLoading,
     OpenCustomizethemePopup,
     CloseCustomizethemePopup,
+    DimBackground(bool),
 }
 
 #[derive(Debug)]
@@ -241,314 +243,21 @@ impl Component for BiblePage {
                         #[local_ref]
                         section_list -> gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
-                            set_margin_all: 30,
+                                set_margin_all: 30,
+                            },
                         },
                     },
-                  },
 
-                  #[name = "dim_scrim"]
-                  add_overlay = &gtk::Box {
-                      add_css_class: "dim-scrim",
-                      set_visible: false,
-                      set_can_target: false,
-                  },
+                    #[name = "dim_scrim"]
+                    add_overlay = &gtk::Box {
+                        add_css_class: "dim-scrim",
+                        set_visible: false,
+                        set_can_target: false,
+                    },
 
-
-                  #[name = "overlay_container"]
-                  add_overlay = &gtk::Box {
-                      set_halign: gtk::Align::End,
-                      set_valign: gtk::Align::End,
-                      set_margin_all: 25,
-                      set_vexpand: false,
-
-                      #[name = "menu_card"]
-                      gtk::Box {
-                          set_orientation: gtk::Orientation::Vertical,
-                          add_css_class: "page-menu-card",
-                          set_spacing: 0,
-                          set_valign: gtk::Align::End,
-
-                          #[name = "menu_button"]
-                          gtk::Button {
-                              add_css_class: "circular",
-                              add_css_class: "osd",
-                              add_css_class: "studypage-menu-trigger-btn",
-                              set_has_frame: false,
-                              set_width_request: 64,
-                              set_height_request: 64,
-                              set_halign: gtk::Align::Center,
-                              set_valign: gtk::Align::Start,
-                              gtk::Image { set_icon_name: Some("page-menu-symbolic"), set_pixel_size: 24 }
-                          },
-
-                           // BOTTOM ELEMENT: THE REVEALER
-                          #[name = "options_revealer"]
-                            gtk::Revealer {
-                                set_transition_type: gtk::RevealerTransitionType::SlideDown,
-                                set_transition_duration: 250,
-                                set_visible: false,
-                                // This ensures it grows DOWN from the button without pre-allocating space
-                                set_valign: gtk::Align::Start,
-                                set_vexpand: false,
-
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical,
-                                    set_spacing: 10,
-                                    set_width_request: 350,
-                                    // Strict margins: Top is 0 to touch the button
-
-                                    // SECTION: FONT SIZE
-                                    gtk::Box {
-                                        set_orientation: gtk::Orientation::Vertical,
-                                        set_hexpand: false,
-                                        set_spacing: 12,
-                                        add_css_class: "osd",
-                                        add_css_class: "studypage-menu-section-container",
-                                        set_width_request: 350,
-
-                                        gtk::Label{
-                                            set_label: "Theme and Font",
-                                            add_css_class: "title-3",
-                                            set_margin_start: 20,
-                                            set_margin_end: 20,
-                                            set_margin_top: 20,
-                                            set_xalign: 0.0,
-                                        },
-
-                                        gtk::Label{
-                                            set_label: "Font Size",
-                                            add_css_class: "title-4",
-                                            set_margin_start: 20,
-                                            set_margin_end: 20,
-                                            set_xalign: 0.0,
-                                        },
-
-                                        gtk::Box{
-                                            set_margin_start: 20,
-                                            set_margin_end: 20,
-                                            set_orientation: gtk::Orientation::Horizontal,
-
-                                            gtk::Image {
-                                                set_icon_name: Some("font-letter-symbolic"),
-                                            },
-
-
-                                            gtk::Scale::with_range(gtk::Orientation::Horizontal, 12.0, 32.0, 1.0) {
-                                                set_hexpand: true,
-                                                add_css_class: "accent",
-                                                #[watch]
-                                                set_value: model.config.read().unwrap().font_size(),
-                                                connect_value_changed[sender] => move |scale| {
-                                                    sender.input(
-                                                        StudyInput::ToggleDisplay(
-                                                            VerseInputMessage::ChangeFontSize(
-                                                                scale.value()
-                                                            )
-                                                        )
-                                                    )
-                                                }
-                                            },
-
-                                            gtk::Image {
-                                                set_icon_name: Some("font-letter-symbolic"),
-                                                set_pixel_size: 30,
-                                            },
-                                        },
-
-                                        gtk::Box{
-                                            set_margin_start: 20,
-                                            set_margin_bottom: 20,
-                                            set_margin_end: 20,
-                                            set_orientation: gtk::Orientation::Vertical,
-                                            set_hexpand: true,
-
-                                            gtk::Label{
-                                                set_label: "Fonts",
-                                                add_css_class: "title-4",
-                                                set_xalign: 0.0,
-                                            },
-
-                                             gtk::ScrolledWindow {
-                                                set_hscrollbar_policy: gtk::PolicyType::Automatic,
-                                                set_vscrollbar_policy: gtk::PolicyType::Never,
-                                                set_hexpand: true,
-                                                set_height_request: 40,
-                                                add_css_class: "font-scroll-container",
-
-                                                #[name="menu_fonts_container"]
-                                                gtk::Box {
-                                                    set_orientation: gtk::Orientation::Horizontal,
-                                                    set_spacing: 10,
-                                                    set_margin_all: 5,
-                                                    set_hexpand: true,
-                                                }
-                                            },
-
-                                           gtk::Button {
-                                                set_margin_top: 5,
-                                                adw::ButtonContent {
-                                                    set_icon_name: "emblem-system-symbolic",
-                                                    set_label: "Customize",
-                                                },
-
-                                                connect_clicked[sender] => move |_|{
-                                                    sender.input(StudyInput::OpenCustomizethemePopup)
-                                                }
-                                            }
-                                        }
-                                    },
-
-                                    // SECTION: TOGGLES
-                                    gtk::Box{
-                                        add_css_class: "osd",
-                                        add_css_class: "studypage-menu-section-container",
-                                        set_orientation: gtk::Orientation::Vertical,
-                                        set_spacing: 12,
-                                        set_width_request: 350,
-
-                                        gtk::Label{
-                                            set_label: "Book Options",
-                                            add_css_class: "title-3",
-                                            set_margin_start: 20,
-                                            set_margin_end: 20,
-                                            set_margin_top: 20,
-                                            set_xalign: 0.0,
-                                        },
-
-
-                                        gtk::Box {
-                                            set_orientation: gtk::Orientation::Vertical,
-                                            set_spacing: 10,
-                                            set_homogeneous: false,
-                                            set_margin_end: 20,
-                                            set_margin_start: 20,
-
-                                            gtk::Label{
-                                                set_label: "Text",
-                                                add_css_class: "title-4",
-                                                set_xalign: 0.0,
-                                            },
-
-                                             gtk::FlowBox {
-                                                set_orientation: gtk::Orientation::Horizontal,
-                                                set_hexpand: true,
-                                                set_max_children_per_line: 1,
-                                                set_min_children_per_line: 1,
-
-                                                 gtk::CheckButton {
-                                                    set_label: Some("Words of Christ in Red"),
-                                                    #[watch]
-                                                    set_active: model.config.read().unwrap().christ_words_red(),
-                                                    connect_toggled[sender] => move |btn| {
-                                                        let msg = VerseInputMessage::PutChristWordsInRed(btn.is_active());
-                                                        sender.input(StudyInput::ToggleDisplay(msg));
-                                                    }
-                                                },
-
-                                                gtk::Box{
-                                                    set_orientation: gtk::Orientation::Horizontal,
-                                                    set_spacing: 30,
-
-                                                    gtk::Label{
-                                                        set_label: "Added words"
-                                                    },
-
-                                                    gtk::Separator{
-                                                        set_orientation: gtk::Orientation::Horizontal,
-                                                        add_css_class: "spacer",
-                                                        set_hexpand: true
-                                                    },
-
-                                                    gtk::DropDown {
-                                                        set_halign: gtk::Align::End,
-                                                        set_model: Some(&gtk::StringList::new(
-                                                            &AddedWordStyle::all().iter().map(
-                                                                |style| style.to_string()
-                                                            ).collect::<Vec<_>>()
-                                                        .iter().map(
-                                                            |string| string.as_str()
-                                                        ).collect::<Vec<_>>())),
-                                                        //connect_selected_item_notify[sender] => move |dd| {
-                                                            //sender.input(StudyPageInput::UpdateModule(dd.selected()));
-                                                        //}
-                                                    },
-                                                }
-
-                                             },
-
-                                              gtk::Label{
-                                                set_label: "Lexicons",
-                                                add_css_class: "title-4",
-                                                set_xalign: 0.0,
-                                            },
-
-
-                                            gtk::FlowBox {
-                                                set_orientation: gtk::Orientation::Horizontal,
-                                                set_hexpand: true,
-                                                set_max_children_per_line: 2,
-                                                set_min_children_per_line: 2,
-
-
-                                                gtk::CheckButton {
-                                                    set_label: Some("Strongs"),
-                                                    #[watch]
-                                                    set_active: model.config.read().unwrap().show_strongs(),
-                                                    connect_toggled[sender] => move |btn| {
-                                                        let msg = if btn.is_active() { VerseInputMessage::EnableStrongs }
-                                                                else { VerseInputMessage::DisableStrongs };
-                                                        sender.input(StudyInput::ToggleDisplay(msg));
-                                                    }
-                                                },
-
-                                                 gtk::CheckButton {
-                                                    set_label: Some("Lemma"),
-                                                    #[watch]
-                                                    set_active: model.config.read().unwrap().show_lemma(),
-                                                    connect_toggled[sender] => move |btn| {
-                                                        let msg = if btn.is_active() { VerseInputMessage::EnableLemma }
-                                                                else { VerseInputMessage::DisableLemma };
-                                                        sender.input(StudyInput::ToggleDisplay(msg));
-                                                    }
-                                                },
-                                                gtk::CheckButton {
-                                                    set_label: Some("Morph"),
-                                                    #[watch]
-                                                    set_active: model.config.read().unwrap().show_morphs(),
-                                                    connect_toggled[sender] => move |btn| {
-                                                        let msg = if btn.is_active() { VerseInputMessage::EnableMorphs }
-                                                                else { VerseInputMessage::DisableMorphs };
-                                                        sender.input(StudyInput::ToggleDisplay(msg));
-                                                    }
-                                                },
-
-                                            },
-                                        },
-                                         gtk::Box {
-                                                set_spacing: 8,
-                                                set_homogeneous: true,
-                                                set_margin_end: 20,
-                                                set_margin_start: 20,
-                                                set_margin_bottom: 20,
-
-                                                 gtk::CheckButton {
-                                                    set_label: Some("Show verse Notes"),
-                                                    #[watch]
-                                                    set_active: model.config.read().unwrap().show_notes(),
-                                                    connect_toggled[sender] => move |btn| {
-                                                        let msg = if btn.is_active() { VerseInputMessage::EnableNotes }
-                                                                else { VerseInputMessage::DisableNotes };
-                                                        sender.input(StudyInput::ToggleDisplay(msg));
-                                                    }
-                                                },
-                                        }
-                                    }
-                              }
-                          }
-                      }
-                  }
-
-                  , add_overlay = model.expanding_theme_menu.widget(),
+                    add_overlay = model.expanding_theme_menu.widget(){
+                        set_margin_all: 25,
+                    },
 
                 }
             }
@@ -627,6 +336,7 @@ impl Component for BiblePage {
                 |output| match output {
                     ThemeMenuOutput::OpenThemePopup => StudyInput::OpenCustomizethemePopup,
                     ThemeMenuOutput::ToggleDisplay(msg) => StudyInput::ToggleDisplay(msg),
+                    ThemeMenuOutput::DimBackground(dim) => StudyInput::DimBackground(dim),
                 },
             ),
         };
@@ -637,58 +347,6 @@ impl Component for BiblePage {
         Self::populate_version_grid(&widgets, &modules, sender.clone());
         Self::populate_book_grid(&widgets, &module_books, sender.clone());
         Self::populate_chapter_grid(&widgets, sender.clone(), chapter_count);
-
-        // 7. Setup Overlay Animations
-        let motion = gtk::EventControllerMotion::new();
-        let options_revealer = widgets.options_revealer.clone();
-        let dim_scrim = widgets.dim_scrim.clone();
-        let menu_button = widgets.menu_button.clone();
-
-        motion.connect_enter(clone!(
-            #[weak]
-            options_revealer,
-            #[weak]
-            dim_scrim,
-            #[weak]
-            menu_button,
-            move |_, _, _| {
-                options_revealer.set_visible(true);
-                options_revealer.set_reveal_child(true);
-                dim_scrim.set_visible(true);
-                menu_button.set_opacity(0.0);
-                menu_button.set_can_target(false);
-            }
-        ));
-
-        motion.connect_leave(clone!(
-            #[weak]
-            options_revealer,
-            #[weak]
-            dim_scrim,
-            #[weak]
-            menu_button,
-            move |_| {
-                options_revealer.set_reveal_child(false);
-                dim_scrim.set_visible(false);
-                menu_button.set_opacity(1.0);
-                menu_button.set_can_target(true);
-            }
-        ));
-
-        widgets
-            .options_revealer
-            .connect_child_revealed_notify(|rev| {
-                if !rev.reveals_child() && !rev.is_child_revealed() {
-                    rev.set_visible(false);
-                }
-            });
-
-        widgets.overlay_container.add_controller(motion);
-        Self::populate_fonts_container(
-            &widgets.menu_fonts_container,
-            sender.clone(),
-            model.config.clone(),
-        );
 
         // Load initial reference
 
@@ -873,6 +531,9 @@ impl Component for BiblePage {
                     VerseInputMessage::UpdateDisplayConf(config),
                 ));
             }
+            StudyInput::DimBackground(dim) => {
+                widgets.dim_scrim.set_visible(dim);
+            }
         }
 
         let duration = start_time.elapsed();
@@ -880,5 +541,6 @@ impl Component for BiblePage {
         if duration.as_millis() > 10 {
             println!("Slow frame detected: {:?}", duration);
         }
+        
     }
 }

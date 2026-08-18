@@ -9,6 +9,7 @@ use relm4::RelmSetChildExt;
 use relm4::prelude::*;
 use relm4::{Component, ComponentParts, ComponentSender};
 
+use crate::features::bible::components::page::helpers::AddedWordStyle;
 use crate::features::bible::components::page::helpers::AvailableFonts;
 use crate::features::bible::components::page::verse_components::verse::VerseInputMessage;
 use crate::features::core::display_configurations::config::TextConfig;
@@ -56,6 +57,7 @@ pub enum ThemeMenuInput {
 pub enum ThemeMenuOutput {
     OpenThemePopup,
     ToggleDisplay(VerseInputMessage),
+    DimBackground(bool),
 }
 
 pub struct ThemeMenuWidgets {
@@ -193,6 +195,7 @@ impl Component for ExpandingThemeMenu {
                 let is_expanded = final_state == MenuState::Expanded;
                 widgets.content.set_visible(is_expanded);
                 widgets.content.set_can_target(is_expanded);
+                let _ = sender.output(ThemeMenuOutput::DimBackground(is_expanded));
                 if !is_expanded {
                     widgets.canvas.set_visible(true);
                 }
@@ -313,6 +316,7 @@ fn build_card_container() -> gtk::Box {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 10);
 
     card.add_css_class("card");
+    card.add_css_class("osd");
     card.add_css_class("menu-card-surface");
 
     let provider = gtk::CssProvider::new();
@@ -361,7 +365,7 @@ fn build_content_box(
     let header_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
     let title = gtk::Label::new(Some("Theme and Font"));
-    title.add_css_class("title-2");
+    title.add_css_class("title-3");
     title.set_hexpand(true);
     title.set_xalign(0.0);
 
@@ -385,20 +389,18 @@ fn build_content_box(
     top_card.append(&font_label);
 
     let slider_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    let small_a = gtk::Label::new(Some("A"));
-    small_a.add_css_class("title-4");
+    let small_a = gtk::Image::from_icon_name("font-letter-symbolic");
 
-    let big_a = gtk::Label::new(Some("A"));
-    big_a.add_css_class("title-1");
+    let big_a = gtk::Image::from_icon_name("font-letter-symbolic");
+    big_a.set_pixel_size(30);
 
     let scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 12.0, 32.0, 1.0);
     scale.set_hexpand(true);
-    scale.add_css_class("accent");
     scale.set_value(config.read().unwrap().font_size());
     {
         let sender = sender.clone();
-        scale.connect_value_changed(move |s| {
-            sender.input(ThemeMenuInput::FontSizeChanged(s.value()));
+        scale.connect_value_changed(move |scale| {
+            sender.input(ThemeMenuInput::FontSizeChanged(scale.value()));
         });
     }
 
@@ -406,7 +408,6 @@ fn build_content_box(
     slider_box.append(&scale);
     slider_box.append(&big_a);
     top_card.append(&slider_box);
-
 
     //Fonts
     let fonts_header = gtk::Label::new(Some("Fonts"));
@@ -486,7 +487,7 @@ fn build_content_box(
     let bottom_card = build_card_container();
 
     let book_options = gtk::Label::new(Some("Book Options"));
-    book_options.add_css_class("title-2");
+    book_options.add_css_class("title-3");
     book_options.set_xalign(0.0);
     bottom_card.append(&book_options);
 
@@ -510,7 +511,14 @@ fn build_content_box(
     added_words_label.set_hexpand(true);
     added_words_label.set_xalign(0.0);
 
-    let drop_down = gtk::DropDown::from_strings(&["Italic", "Underline", "None"]);
+    let strings: Vec<String> = AddedWordStyle::all()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+    let str_slices: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
+
+    let drop_down = gtk::DropDown::from_strings(&str_slices);
     {
         let sender = sender.clone();
         drop_down.connect_selected_notify(move |dd| {

@@ -74,8 +74,7 @@ label {
 }
 
 .dim-scrim {
-    background: radial-gradient(circle at bottom right, alpha(black, 0.7), transparent 75%);
-    /* Make the dimming disappear faster than it appears */
+    background: alpha(black, 0.4);
     transition: opacity 250ms ease-in-out;
 }
 

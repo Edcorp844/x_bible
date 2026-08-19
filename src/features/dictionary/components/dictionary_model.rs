@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use crate::features::dictionary::html_to_pango::{get_theme_color_hex, html_to_pango_markup};
 use gtk::prelude::*;
 use relm4::{Component, ComponentParts, ComponentSender, prelude::*};
-use xbible_engine::engines::{module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery, xbible_engine::engine::XBibleEngine};
-use crate::features::dictionary::html_to_pango::html_to_pango_markup;
-
+use xbible_engine::engines::{
+    module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery,
+    xbible_engine::engine::XBibleEngine,
+};
 
 pub struct DictionaryPage {
     engine: Arc<XBibleEngine>,
@@ -136,8 +138,17 @@ impl Component for DictionaryPage {
 
                 // 3. Populate results with Source Heading + Definition Body
                 for result in lookup_result.results {
+                    let warning_color = get_theme_color_hex(&widgets.header_label, "warning_color");
+                    let warning_fg = get_theme_color_hex(&widgets.header_label, "warning_fg_color");
+                    let warning_bg = get_theme_color_hex(&widgets.header_label, "warning_bg_color");
                     // Convert HTML definition to Pango markup
-                    let pango_definition = html_to_pango_markup(&result.definition);
+                    let pango_definition = html_to_pango_markup(
+                        &result.definition,
+                        None,
+                        &warning_color,
+                        &warning_fg,
+                        &warning_bg,
+                    );
                     let result_box = gtk::Box::builder()
                         .orientation(gtk::Orientation::Vertical)
                         .spacing(8)

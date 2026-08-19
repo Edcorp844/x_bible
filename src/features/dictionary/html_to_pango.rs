@@ -66,18 +66,20 @@ pub fn html_to_pango_markup(
     text = Regex::new(r"(?s)<!--.*?-->").unwrap().replace_all(&text, "").to_string();
 
     // 3. Class Transformations (`class="orth"` & `class="pos"`)
+    // Replace class="orth" with standard Pango attributes
     let orth_re = Regex::new(r#"(?i)<span\b[^>]*\bclass="orth"[^>]*>(.*?)</span>"#).unwrap();
     text = orth_re.replace_all(&text, format!(r#"<span foreground="{primary_color}" weight="bold">$1</span>"#)).to_string();
 
+    // Replace class="pos" with standard Pango attributes
     let pos_re = Regex::new(r#"(?i)<span\b[^>]*\bclass="pos"[^>]*>(.*?)</span>"#).unwrap();
     text = pos_re.replace_all(&text, format!(r#"<span foreground="{secondary_color}" style="italic">$1</span>"#)).to_string();
 
-    // 4. Blockquotes (`<div class="cit">` and `<blockquote>`)
+    // 4. Transform Blockquotes (`<div class="cit">` and `<blockquote>`)
     let cit_open = Regex::new(r#"(?i)<div\s+class="cit"[^>]*>|<blockquote>"#).unwrap();
     text = cit_open.replace_all(&text, format!(r#"\n<span background="{quote_bg}" style="italic" indent="24000">\n"#)).to_string();
 
     let cit_close = Regex::new(r"(?i)</div>|</sub>|blockquote>").unwrap();
-    text = Regex::new(r"(?i)</div>|</blockquote>").unwrap().replace_all(&text, "\n</span>\n").to_string();
+    text = Regex::new(r"(?i)</div>|----------------------------------------").unwrap().replace_all(&text, "\n</span>\n").to_string();
 
     // 5. Semantic HTML tag conversions
     text = Regex::new(r"(?i)</?strong>").unwrap().replace_all(&text, "<b>").to_string();
@@ -92,14 +94,16 @@ pub fn html_to_pango_markup(
     text = Regex::new(r"(?i)</p>").unwrap().replace_all(&text, "\n\n").to_string();
     text = Regex::new(r"(?i)<p[^>]*>").unwrap().replace_all(&text, "").to_string();
 
-    // 6. STRIP UNKNOWN HTML CONTAINERS & ATTRIBUTES
-    // Remove wrapper tags like `<span class="def">`, `<div class="...">`, etc.
-    text = Regex::new(r#"(?i)<span\b[^>]*class="(?!orth|pos)[^"]*"[^>]*>"#).unwrap().replace_all(&text, "").to_string();
-    text = Regex::new(r"(?i)</?div[^>]*>").unwrap().replace_all(&text, "").to_string();
-    text = Regex::new(r#"(?i)<span\b(?![^>]*\b(foreground|background|size|rise|style|weight)\b)[^>]*>"#).unwrap().replace_all(&text, "").to_string();
+    // 6. Clean up remaining unsupported containers & attributes without look-arounds
+    // Strip `class="..."`, `id="..."`, and other raw HTML attributes from opening <span> tags that aren't valid Pango
+    let class_attr_re = Regex::new(r#"(?i)\s+class="[^"]*""#).unwrap();
+    text = class_attr_re.replace_all(&text, "").to_string();
 
-    // Clean up orphan closing spans if outer wrappers were removed
-    // (Only keep valid Pango tags)
+    // Remove empty/plain `<span>` and `</span>` wrappers (e.g. converted from `<span class="def">`)
+    text = Regex::new(r"(?i)<span>").unwrap().replace_all(&text, "").to_string();
+
+    // Strip generic `<div>` wrapper tags while preserving inner content
+    text = Regex::new(r"(?i)</?div[^>]*>").unwrap().replace_all(&text, "").to_string();
 
     // 7. Whitespace normalization
     text = Regex::new(r"[ \t]+").unwrap().replace_all(&text, " ").to_string();

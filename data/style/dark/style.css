@@ -100,15 +100,7 @@ label {
 
 .menu-font-option {
     border-radius: 10px;
-
-    /* Vertical padding: 8px, Horizontal padding: 16px */
-    /* This ensures it looks like a balanced 'chip' */
     padding: 4px 4px;
-
-    /* Ensure the font name doesn't wrap inside the chip */
-    white-space: nowrap;
-
-    /* Adds a smooth transition for hover effects */
     transition: all 0.2s ease;
 }
 

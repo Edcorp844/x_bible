@@ -140,50 +140,16 @@ impl Component for BiblePage {
                                     set_min_content_width: 600,
                                     set_min_content_height: 400,
                                     set_max_content_height: 600,
-                                    gtk::Box {
-                                        set_orientation: gtk::Orientation::Vertical,
-                                        set_spacing: 10,
-                                        set_margin_all: 12,
-                                        #[name = "ot_container"]
-                                        gtk::Box {
-                                            set_orientation: gtk::Orientation::Vertical,
-                                            set_visible: false,
-                                            gtk::Label {
-                                                set_label: "Old Testament",
-                                                set_halign: gtk::Align::Start,
-                                                add_css_class: "title-4",
-                                                set_margin_bottom: 8,
-                                            },
-                                            #[name = "ot_grid"]
-                                            gtk::FlowBox {
-                                                set_max_children_per_line: 4,
-                                                set_min_children_per_line: 4,
-                                                set_selection_mode: gtk::SelectionMode::None,
-                                                set_column_spacing: 8,
-                                                set_row_spacing: 8,
-                                            },
-                                        },
-                                        #[name = "nt_container"]
-                                        gtk::Box {
-                                            set_orientation: gtk::Orientation::Vertical,
-                                            set_visible: false,
-                                            set_margin_top: 20,
-                                            gtk::Label {
-                                                set_label: "New Testament",
-                                                set_halign: gtk::Align::Start,
-                                                add_css_class: "title-4",
-                                                set_margin_bottom: 8,
-                                            },
-                                            #[name = "nt_grid"]
-                                            gtk::FlowBox {
-                                                set_max_children_per_line: 4,
-                                                set_min_children_per_line: 4,
-                                                set_selection_mode: gtk::SelectionMode::None,
-                                                set_column_spacing: 8,
-                                                set_row_spacing: 8,
-                                            },
-                                        },
+                                    
+                                    #[name = "book_grid"]
+                                    gtk::FlowBox {
+                                        set_max_children_per_line: 4,
+                                        set_min_children_per_line: 4,
+                                        set_selection_mode: gtk::SelectionMode::None,
+                                        set_column_spacing: 8,
+                                        set_row_spacing: 8,
                                     },
+                                        
                                 },
                             },
                             #[wrap(Some)]

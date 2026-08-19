@@ -98,19 +98,14 @@ impl BiblePage {
         sender: ComponentSender<Self>,
     ) {
         // Instant Clear
-        while let Some(child) = widgets.ot_grid.first_child() {
-            widgets.ot_grid.remove(&child);
+        while let Some(child) = widgets.bible_grid.first_child() {
+            widgets.bible_grid.remove(&child);
         }
-        while let Some(child) = widgets.nt_grid.first_child() {
-            widgets.nt_grid.remove(&child);
-        }
+      
 
         let mut books_queue: std::collections::VecDeque<ModuleBook> = books.to_vec().into();
 
-        let ot_grid = widgets.ot_grid.clone();
-        let nt_grid = widgets.nt_grid.clone();
-        let ot_cont = widgets.ot_container.clone();
-        let nt_cont = widgets.nt_container.clone();
+        let book_grid = widgets.book_grid.clone();
         let pop = widgets.book_popover.clone();
         let s = sender.clone();
 
@@ -128,59 +123,8 @@ impl BiblePage {
                         p_inner.popdown();
                     });
 
-                    // Determine if book is OT or NT
-                    // Common OT books (1-39 in traditional order)
-                    let ot_books = vec![
-                        "Genesis",
-                        "Exodus",
-                        "Leviticus",
-                        "Numbers",
-                        "Deuteronomy",
-                        "Joshua",
-                        "Judges",
-                        "Ruth",
-                        "1 Samuel",
-                        "2 Samuel",
-                        "1 Kings",
-                        "2 Kings",
-                        "1 Chronicles",
-                        "2 Chronicles",
-                        "Ezra",
-                        "Nehemiah",
-                        "Esther",
-                        "Job",
-                        "Psalm",
-                        "Psalms",
-                        "Proverbs",
-                        "Ecclesiastes",
-                        "Isaiah",
-                        "Jeremiah",
-                        "Lamentations",
-                        "Ezekiel",
-                        "Daniel",
-                        "Hosea",
-                        "Joel",
-                        "Amos",
-                        "Obadiah",
-                        "Jonah",
-                        "Micah",
-                        "Nahum",
-                        "Habakkuk",
-                        "Zephaniah",
-                        "Haggai",
-                        "Zechariah",
-                        "Malachi",
-                    ];
-
-                    let is_ot = ot_books.iter().any(|&b| book.name.starts_with(b));
-
-                    if is_ot {
-                        ot_grid.append(&btn);
-                        ot_cont.set_visible(true);
-                    } else {
-                        nt_grid.append(&btn);
-                        nt_cont.set_visible(true);
-                    }
+                   book_grid.append(&btn);
+                   book_grid.set_visible(true);
                 } else {
                     return glib::ControlFlow::Break;
                 }

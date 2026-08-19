@@ -125,10 +125,10 @@ impl SimpleComponent for AppModel {
                             gtk::Overlay {
                                 #[watch]
                                 set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
-                                add_overlay = model.persistent_player.widget() {
-                                    set_valign: gtk::Align::Start,
-                                    set_halign: gtk::Align::Center,
-                                }
+                                // add_overlay = model.persistent_player.widget() {
+                                //     set_valign: gtk::Align::End,
+                                //     set_halign: gtk::Align::Center,
+                                // }
                             }
                         },
 

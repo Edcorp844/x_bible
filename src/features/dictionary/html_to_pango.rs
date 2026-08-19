@@ -71,7 +71,7 @@ pub fn html_to_pango_markup(
     text = Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap().replace_all(&text, "").to_string();
     text = Regex::new(r"(?s)<!--.*?-->").unwrap().replace_all(&text, "").to_string();
 
-    // 3. Class Transformations (orth & pos styling)
+    // 3. Class Transformations (orth & pos styling to Pango <span> tags)
     let orth_re = Regex::new(r#"(?i)<([^>]*)\bclass="orth"([^>]*)>"#).unwrap();
     text = orth_re.replace_all(&text, format!(r#"<$1 foreground="{primary_color}" weight="bold"$2>"#)).to_string();
 
@@ -82,9 +82,8 @@ pub fn html_to_pango_markup(
     let cit_open = Regex::new(r#"(?i)<div\s+class="cit"[^>]*>|<blockquote>"#).unwrap();
     text = cit_open.replace_all(&text, format!(r#"\n<span background="{quote_bg}" style="italic" indent="24000">\n"#)).to_string();
 
-    let cit_close = Regex::new(r#"(?i)</div>|</sub>|</blockquote>"#).unwrap();
-    let cit_close_div = Regex::new(r#"(?i)</div>|blockquote>"#).unwrap();
-    text = Regex::new(r"(?i)</div>|</blockquote>").unwrap().replace_all(&text, "\n</span>\n").to_string();
+    let cit_close = Regex::new(r"(?i)</div>|</blockquote>").unwrap();
+    text = cit_close.replace_all(&text, "\n</span>\n").to_string();
 
     // 5. Semantic tag conversions to GTK/Pango equivalents
     text = Regex::new(r"(?i)</?strong>").unwrap().replace_all(&text, "<b>").to_string();
@@ -102,7 +101,7 @@ pub fn html_to_pango_markup(
     text = Regex::new(r"(?i)</p>").unwrap().replace_all(&text, "\n\n").to_string();
     text = Regex::new(r"(?i)<p[^>]*>").unwrap().replace_all(&text, "").to_string();
 
-    // 6. Strip unhandled div/span containers but preserve their child tags
+    // 6. Strip remaining unhandled div/span containers but preserve their child markup
     text = Regex::new(r"(?i)</?div[^>]*>").unwrap().replace_all(&text, "").to_string();
 
     // 7. Collapse excessive horizontal whitespace while preserving single newlines
@@ -114,3 +113,7 @@ pub fn html_to_pango_markup(
 
     text.trim().to_string()
 }
+
+// ============================================================================
+// 3. Tests
+// ============================================================================

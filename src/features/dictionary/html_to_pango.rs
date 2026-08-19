@@ -1,132 +1,83 @@
-use gtk::gdk::RGBA;
-use gtk::prelude::*;
 use regex::Regex;
 
-// ============================================================================
-// 1. Theme Color Extraction Helper
-// ============================================================================
+/// Converts HTML to valid Pango markup for GTK labels without dynamic color injection.
+pub fn html_to_pango_markup(html: &str) -> String {
+    let mut result = html.trim().to_string();
 
-/// Resolves a named GTK/Libadwaita theme color (e.g., "warning_color", "warning_bg_color")
-/// into a standard hex string format (`#RRGGBB`) using the widget's current `StyleContext`.
-pub fn get_theme_color_hex(widget: &impl IsA<gtk::Widget>, color_name: &str) -> String {
-    let style_context = widget.style_context();
+    // 1. Remove script, style, and comments first (along with their contents)
+    result = Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap().replace_all(&result, "").to_string();
+    result = Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap().replace_all(&result, "").to_string();
+    result = Regex::new(r"(?s)<!--.*?-->").unwrap().replace_all(&result, "").to_string();
 
-    let rgba = style_context.lookup_color(color_name).unwrap_or_else(|| {
-        match color_name {
-            "warning_bg_color" => RGBA::builder().red(0.98).green(0.68).blue(0.24).alpha(0.15).build(),
-            "warning_fg_color" => RGBA::builder().red(0.98).green(0.68).blue(0.24).alpha(1.0).build(),
-            _ => RGBA::builder().red(0.98).green(0.68).blue(0.24).alpha(1.0).build(), // Fallback warning amber
-        }
-    });
+    // 2. Semantic tag conversions to standard Pango tags
+    result = Regex::new(r"(?i)</?strong>").unwrap().replace_all(&result, "").to_string();
+    
+    // Bold, Italic, Underline
+    result = Regex::new(r"(?i)<em>(.*?)</em>").unwrap().replace_all(&result, "<i>$1</i>").to_string();
+    result = Regex::new(r"(?i)<cite>(.*?)</cite>").unwrap().replace_all(&result, "<i>$1</i>").to_string();
+    result = Regex::new(r"(?i)<u>(.*?)</u>").unwrap().replace_all(&result, "<u>$1</u>").to_string();
 
-    rgba_to_hex(&rgba)
+    // Font sizing and positioning (using Pango's standard font_scale & rise attributes)
+    result = Regex::new(r"(?i)<small>(.*?)</small>").unwrap().replace_all(&result, r#"<span font_scale="small">$1</span>"#).to_string();
+    result = Regex::new(r"(?i)<sup>(.*?)</sup>").unwrap().replace_all(&result, r#"<span font_scale="small" rise="3000">$1</span>"#).to_string();
+    result = Regex::new(r"(?i)<sub>(.*?)</sub>").unwrap().replace_all(&result, r#"<span font_scale="small" rise="-3000">$1</span>"#).to_string();
+
+    // 3. Structure, Paragraphs & Line breaks
+    result = Regex::new(r"(?i)<br\s*/?>").unwrap().replace_all(&result, "\n").to_string();
+    result = Regex::new(r"(?i)</p>").unwrap().replace_all(&result, "\n\n").to_string();
+    result = Regex::new(r"(?i)<p[^>]*>").unwrap().replace_all(&result, "").to_string();
+    result = Regex::new(r"(?i)</?div[^>]*>").unwrap().replace_all(&result, "").to_string();
+
+    // 4. Strip unknown wrapper spans (like <span class="def">) while preserving valid Pango spans
+    result = Regex::new(r#"(?i)<span\b[^>]*class="[^"]*"[^>]*>"#).unwrap().replace_all(&result, "").to_string();
+
+    // 5. Clean up non-Pango HTML tags remaining in the string
+    // Strip tags that aren't <b>, <i>, <u>, or <span>
+    let unsupported_tags = Regex::new(r#"(?i)</?(?!(?:b|i|u|span)\b)[a-z1-6]+[^>]*>"#).unwrap();
+    result = unsupported_tags.replace_all(&result, "").to_string();
+
+    // 6. Whitespace cleanup (preserve linebreaks!)
+    result = Regex::new(r"[ \t]+").unwrap().replace_all(&result, " ").to_string();
+    result = Regex::new(r"\n\s*\n+").unwrap().replace_all(&result, "\n\n").to_string();
+
+    // 7. Entity decoding safe for Pango (do NOT unescape & to raw ampersands!)
+    result = result.replace("&nbsp;", " ");
+    result = result.replace("&quot;", "\"");
+    result = result.replace("&#39;", "'");
+    result = result.replace("&apos;", "'");
+
+    result.trim().to_string()
 }
-
-/// Converts a `gdk::RGBA` struct into an uppercase hex string (`#RRGGBB`).
-pub fn rgba_to_hex(rgba: &RGBA) -> String {
-    format!(
-        "#{:02X}{:02X}{:02X}",
-        (rgba.red() * 255.0).round() as u8,
-        (rgba.green() * 255.0).round() as u8,
-        (rgba.blue() * 255.0).round() as u8
-    )
-}
-
-// ============================================================================
-// 2. HTML to Pango Markup Converter
-// ============================================================================
-
-/// Converts dictionary HTML content into valid Pango markup for GTK4 labels.
-pub fn html_to_pango_markup(
-    html: &str,
-    key: Option<&str>,
-    primary_color: &str,
-    secondary_color: &str,
-    quote_bg: &str,
-) -> String {
-    let mut text = html.trim().to_string();
-
-    // 1. Strip search key prefix/suffix if present (case-insensitive)
-    if let Some(k) = key {
-        let key_lower = k.trim().to_lowercase();
-        if !key_lower.is_empty() {
-            if text.to_lowercase().starts_with(&key_lower) {
-                text = text[key_lower.len()..].trim().to_string();
-            }
-            if text.to_lowercase().ends_with(&key_lower) {
-                let new_len = text.len() - key_lower.len();
-                text = text[..new_len].trim().to_string();
-            }
-        }
-    }
-
-    // 2. Strip scripts, styles, and comments
-    text = Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap().replace_all(&text, "").to_string();
-    text = Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap().replace_all(&text, "").to_string();
-    text = Regex::new(r"(?s)<!--.*?-->").unwrap().replace_all(&text, "").to_string();
-
-    // 3. Class Transformations (`class="orth"` & `class="pos"`)
-    // Replace class="orth" with standard Pango attributes
-    let orth_re = Regex::new(r#"(?i)<span\b[^>]*\bclass="orth"[^>]*>(.*?)</span>"#).unwrap();
-    text = orth_re.replace_all(&text, format!(r#"<span foreground="{primary_color}" weight="bold">$1</span>"#)).to_string();
-
-    // Replace class="pos" with standard Pango attributes
-    let pos_re = Regex::new(r#"(?i)<span\b[^>]*\bclass="pos"[^>]*>(.*?)</span>"#).unwrap();
-    text = pos_re.replace_all(&text, format!(r#"<span foreground="{secondary_color}" style="italic">$1</span>"#)).to_string();
-
-    // 4. Transform Blockquotes (`<div class="cit">` and `<blockquote>`)
-    let cit_open = Regex::new(r#"(?i)<div\s+class="cit"[^>]*>|<blockquote>"#).unwrap();
-    text = cit_open.replace_all(&text, format!(r#"\n<span background="{quote_bg}" style="italic" indent="24000">\n"#)).to_string();
-
-    let cit_close = Regex::new(r"(?i)</div>|</sub>|blockquote>").unwrap();
-    text = Regex::new(r"(?i)</div>|----------------------------------------").unwrap().replace_all(&text, "\n</span>\n").to_string();
-
-    // 5. Semantic HTML tag conversions
-    text = Regex::new(r"(?i)</?strong>").unwrap().replace_all(&text, "<b>").to_string();
-    text = Regex::new(r"(?i)<em>(.*?)</em>").unwrap().replace_all(&text, "<i>$1</i>").to_string();
-    text = Regex::new(r"(?i)<cite>(.*?)</cite>").unwrap().replace_all(&text, "<i>$1</i>").to_string();
-    text = Regex::new(r"(?i)<small>(.*?)</small>").unwrap().replace_all(&text, r#"<span size="small">$1</span>"#).to_string();
-    text = Regex::new(r"(?i)<sup>(.*?)</sup>").unwrap().replace_all(&text, r#"<span size="small" rise="6000">$1</span>"#).to_string();
-    text = Regex::new(r"(?i)<sub>(.*?)</sub>").unwrap().replace_all(&text, r#"<span size="small" rise="-6000">$1</span>"#).to_string();
-
-    // Linebreaks and Paragraphs
-    text = Regex::new(r"(?i)<br\s*/?>").unwrap().replace_all(&text, "\n").to_string();
-    text = Regex::new(r"(?i)</p>").unwrap().replace_all(&text, "\n\n").to_string();
-    text = Regex::new(r"(?i)<p[^>]*>").unwrap().replace_all(&text, "").to_string();
-
-    // 6. Clean up remaining unsupported containers & attributes without look-arounds
-    // Strip `class="..."`, `id="..."`, and other raw HTML attributes from opening <span> tags that aren't valid Pango
-    let class_attr_re = Regex::new(r#"(?i)\s+class="[^"]*""#).unwrap();
-    text = class_attr_re.replace_all(&text, "").to_string();
-
-    // Remove empty/plain `<span>` and `</span>` wrappers (e.g. converted from `<span class="def">`)
-    text = Regex::new(r"(?i)<span>").unwrap().replace_all(&text, "").to_string();
-
-    // Strip generic `<div>` wrapper tags while preserving inner content
-    text = Regex::new(r"(?i)</?div[^>]*>").unwrap().replace_all(&text, "").to_string();
-
-    // 7. Whitespace normalization
-    text = Regex::new(r"[ \t]+").unwrap().replace_all(&text, " ").to_string();
-    text = Regex::new(r"\n\s*\n").unwrap().replace_all(&text, "\n\n").to_string();
-
-    // 8. Entity cleanup
-    text = text.replace("&nbsp;", " ");
-
-    text.trim().to_string()
-}
-
-// ============================================================================
-// 3. Tests
-// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_definition_container_stripping() {
-        let input = r#"<span class="def"><b>VA'RIOUS</b>, <i>adjective</i> [Latin varius.]</span>"#;
-        let markup = html_to_pango_markup(input, None, "#F5C211", "#E5A50A", "#303030");
-        assert_eq!(markup, "<b>VA'RIOUS</b>, <i>adjective</i> [Latin varius.]");
+    fn test_bold_conversion() {
+        let html = "<b>bold text</b>";
+        let result = html_to_pango_markup(html);
+        assert_eq!(result, "<b>bold text</b>");
+    }
+
+    #[test]
+    fn test_italic_conversion() {
+        let html = "<em>italic text</em>";
+        let result = html_to_pango_markup(html);
+        assert_eq!(result, "<i>italic text</i>");
+    }
+
+    #[test]
+    fn test_container_stripping() {
+        let html = r#"<span class="def"><b>VA'RIOUS</b>, <i>adjective</i></span>"#;
+        let result = html_to_pango_markup(html);
+        assert_eq!(result, "<b>VA'RIOUS</b>, <i>adjective</i>");
+    }
+
+    #[test]
+    fn test_linebreaks_preserved() {
+        let html = "Line 1<br>Line 2<p>Paragraph</p>";
+        let result = html_to_pango_markup(html);
+        assert_eq!(result, "Line 1\nLine 2\n\nParagraph");
     }
 }

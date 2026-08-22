@@ -18,6 +18,7 @@ pub struct PreviewDisplayConfig {
     justify: bool,
     theme: String,
     christ_words_red: bool,
+    added_style: AddedWordStyle,
 }
 
 impl PreviewDisplayConfig {
@@ -31,6 +32,7 @@ impl PreviewDisplayConfig {
             justify: false,
             theme: "Default".to_string(),
             christ_words_red: false,
+            added_style: AddedWordStyle::Brackets,
         }
     }
     pub fn from_page_config(config: TextConfig) -> Self {
@@ -43,6 +45,7 @@ impl PreviewDisplayConfig {
         preview_config.set_word_spacing(config.word_spacing());
         preview_config.set_justify(config.justify());
         preview_config.set_theme(config.theme());
+        preview_config.set_added_style(config.added_style());
         preview_config
     }
 
@@ -151,6 +154,10 @@ impl DisplayConfig for PreviewDisplayConfig {
         self.christ_words_red = value
     }
 
+    fn set_added_style(&mut self, value: AddedWordStyle) {
+        self.added_style = value;
+    }
+
     fn apply_message(&mut self, msg: &VerseInputMessage) {
         match msg {
             VerseInputMessage::ChangeFontSize(size) => self.set_font_size(*size),
@@ -164,6 +171,7 @@ impl DisplayConfig for PreviewDisplayConfig {
 
             VerseInputMessage::ChangeBoldFont(bold_font) => self.set_bold_font(*bold_font),
             VerseInputMessage::ChangeJustify(justify) => self.set_justify(*justify),
+            VerseInputMessage::ChangeAddedStyle(added_word_style)=>self.set_added_style(*added_word_style),
             _ => {}
         }
     }

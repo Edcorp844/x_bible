@@ -389,7 +389,7 @@ impl SideBar {
                 .build();
 
             let icon = gtk::Image::from_icon_name(icon_name);
-            icon.set_pixel_size(22);
+            icon.set_pixel_size(16);
             icon.set_margin_start(8);
             icon.add_css_class("sidebar_icon");
 

@@ -116,6 +116,7 @@ impl Component for StudyPage {
                     add_top_bar = &adw::HeaderBar {
                         pack_start = &gtk::ToggleButton {
                             set_icon_name: "sidebar-show-symbolic",
+                            set_valign: gtk::Align::Center,
                             connect_clicked[sender] => move |_| {
                                 let _ = sender.output(StudyPageOutput::ToggleSidebar);
                             }
@@ -241,10 +242,14 @@ impl Component for StudyPage {
 
                         pack_end = &adw::TabButton {
                             set_view: Some(&tab_view),
+                            set_valign: gtk::Align::Center,
                             set_action_name: Some("overview.open"),
+                            set_tooltip_text: Some("Open Tab Overview"),
                         },
                         pack_end = &gtk::Button {
                             set_icon_name: "tab-new-symbolic",
+                            set_valign: gtk::Align::Center,
+                            set_tooltip_text: Some("New Tab"),
                             connect_clicked => StudyPageInput::NewTab,
                         }
                     },

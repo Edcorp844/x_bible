@@ -260,6 +260,7 @@ impl SimpleComponent for AppModel {
                                         StorePageOutput::ToggleSidebar => {
                                             AppInputMessage::ToggleSidebar
                                         }
+                                        StorePageOutput::ModuleSelected(_) =>  AppInputMessage::ToggleSidebar,
                                     },
                                 ),
                             );

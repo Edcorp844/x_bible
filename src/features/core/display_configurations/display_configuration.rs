@@ -76,5 +76,8 @@ pub trait DisplayConfig {
 
     fn set_christ_words_red(&mut self, value: bool);
 
+    fn set_added_style(&mut self, value: AddedWordStyle);
+
     fn apply_message(&mut self, msg: &VerseInputMessage);
+
 }

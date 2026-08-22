@@ -9,9 +9,6 @@ label {
     font-size: 20pt;
 }
 
-.sidebar_icon {
-    color: var(--accent-color);
-}
 
 .verser-number {
     color: var(--blue-3);

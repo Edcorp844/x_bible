@@ -300,7 +300,10 @@ impl Component for ExpandingThemeMenu {
                 };
                 let _ = sender.output(ThemeMenuOutput::ToggleDisplay(msg));
             }
-            ThemeMenuInput::AddedWordsStyleChanged(_style) => {}
+            ThemeMenuInput::AddedWordsStyleChanged(style) => {
+                let msg = VerseInputMessage::ChangeAddedStyle(AddedWordStyle::from_string(&style));
+                let _ = sender.output(ThemeMenuOutput::ToggleDisplay(msg));
+            }
         }
 
         let p = self.progress.get();
@@ -376,7 +379,7 @@ fn draw_pill_toolbar(
     // Hover Highlight Overlays
     if let Some(zone) = hovered_zone {
         let zone_w = w / 3.0;
-        
+
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.08 * alpha);
         match zone {
             0 if has_prev => {
@@ -696,14 +699,20 @@ fn build_content_box(
     added_words_label.set_hexpand(true);
     added_words_label.set_xalign(0.0);
 
-    let strings: Vec<String> = AddedWordStyle::all()
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let all_styles = AddedWordStyle::all();
+
+    let strings: Vec<String> = all_styles.iter().map(|s| s.to_string()).collect();
 
     let str_slices: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
 
     let drop_down = gtk::DropDown::from_strings(&str_slices);
+
+    // Select current config option on startup
+    let current_style = config.read().unwrap().added_style();
+    if let Some(initial_index) = all_styles.iter().position(|s| *s == current_style) {
+        drop_down.set_selected(initial_index as u32);
+    }
+
     {
         let sender = sender.clone();
         drop_down.connect_selected_notify(move |dd| {

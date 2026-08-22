@@ -6,15 +6,12 @@ use xbible_engine::engines::module_engine::module_engine_extensions::{
 
 use crate::features::{
     bible::components::page::{
-        helpers::AvailableFonts,
-        verse_components::{
+        helpers::{AddedWordStyle, AvailableFonts}, verse_components::{
             annotation_colors::{AnnotationColor, AnnotationOutput},
             verse_annotation::{AnnotationSettings, VerseAnnotation},
             verse_menu_button::VerseMenuButton,
-        },
-        word::{WordModel, WordModelInput, WordModelOutput},
-    },
-    core::display_configurations::config::TextConfig,
+        }, word::{WordModel, WordModelInput, WordModelOutput},
+    }, core::display_configurations::config::TextConfig,
 };
 
 
@@ -43,6 +40,7 @@ pub enum VerseInputMessage {
     ChangeLineSpacing(f64),
     ChangeBoldFont(bool),
     ChangeJustify(bool),
+    ChangeAddedStyle(AddedWordStyle),
     PutChristWordsInRed(bool),
     LookUp(DictionaryQuery),
     OpenMenu { x: f64, y: f64 },

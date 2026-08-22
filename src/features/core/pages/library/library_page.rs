@@ -6,9 +6,9 @@ use xbible_engine::engines::{
     module_engine::sword_module::module::SwordModule, xbible_engine::engine::XBibleEngine,
 };
 
-use crate::features::core::pages::library::components::swordmodule_section::{
-    ModuleSection, ModuleSectionInit,
-};
+use crate::features::core::components::swordmodule_section::{ModuleSection, ModuleSectionInit};
+
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LibraryPageCategory {

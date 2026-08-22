@@ -162,6 +162,10 @@ impl DisplayConfig for PageDisplayConfig {
         let _ = self.settings.set_string("page-theme", &value);
     }
 
+    fn set_added_style(&mut self, value: AddedWordStyle) {
+        let _ = self.settings.set_string("added-style", &value.to_string());
+    }
+
     fn apply_message(&mut self, msg: &VerseInputMessage) {
         match msg {
             VerseInputMessage::EnableStrongs => self.set_show_strongs(true),
@@ -183,6 +187,7 @@ impl DisplayConfig for PageDisplayConfig {
             VerseInputMessage::ChangeJustify(justify) => self.set_justify(*justify),
             VerseInputMessage::ChangeBoldFont(bold_font) => self.set_bold_font(*bold_font),
             VerseInputMessage::PutChristWordsInRed(value) => self.set_christ_words_red(*value),
+            VerseInputMessage::ChangeAddedStyle(value)=>self.set_added_style(*value),
             VerseInputMessage::UpdateDisplayConf(config) => {
                 let config = config.read().unwrap();
                 self.set_line_spacing(config.line_spacing());
@@ -192,6 +197,7 @@ impl DisplayConfig for PageDisplayConfig {
                 self.set_font_size(config.font_size());
                 self.set_justify(config.justify());
                 self.set_theme(config.theme());
+                self.set_added_style(config.added_style());
             }
             _ => {}
         }

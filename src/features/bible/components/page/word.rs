@@ -6,10 +6,11 @@ use xbible_engine::engines::module_engine::module_engine_extensions::{
 
 use crate::features::{
     bible::components::page::{
-        helpers::{AddedWordStyle, AvailableFonts}, verse_components::verse_annotation::VerseAnnotation,
-    }, core::display_configurations::config::TextConfig,
+        helpers::{AddedWordStyle, AvailableFonts},
+        verse_components::verse_annotation::VerseAnnotation,
+    },
+    core::display_configurations::config::TextConfig,
 };
-
 
 #[derive(Debug, Clone)]
 pub struct WordModel {
@@ -47,12 +48,11 @@ impl SimpleComponent for WordModel {
             set_halign: model.get_align(),
 
             #[name="word_wrapper"]
-            gtk::Box{
+            gtk::Box {
                 set_orientation: gtk::Orientation::Horizontal,
                 set_spacing: 2,
                 #[track(true)]
                 set_halign: model.get_align(),
-
 
                 gtk::Label {
                     add_css_class: "bible-text",
@@ -64,30 +64,33 @@ impl SimpleComponent for WordModel {
                     #[track(true)]
                     set_direction: model.text_direction,
                     set_xalign: 0.0,
-                   #[watch]
-                inline_css: &format!(
-                    "background-color: alpha({}, 0.8); border-radius: 10px; color: {};",
-                    model.annotation.color.as_deref().unwrap_or("transparent"), if model.red_word {"var(--red-3)"} else {"var(--window-fg-color)"}
-                ),
+                    #[watch]
+                    inline_css: &format!(
+                        "background-color: alpha({}, 0.8); border-radius: 10px; color: {};",
+                        model.annotation.color.as_deref().unwrap_or("transparent"),
+                        if model.red_word { "var(--red-3, #ed333b)" } else { "var(--window-fg-color)" }
+                    ),
 
-                add_controller = gtk::GestureClick {
-                            set_button: 1,
-                            connect_released[sender] => move |_, _, _, _| {
-                                sender.input(WordModelInput::LookUp)
-                            }
+                    add_controller = gtk::GestureClick {
+                        set_button: 1,
+                        connect_released[sender] => move |_, _, _, _| {
+                            sender.input(WordModelInput::LookUp)
                         }
+                    }
                 },
             },
 
-            gtk::Box{
+            gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
                 set_spacing: 2,
                 set_halign: gtk::Align::Start,
 
                 #[watch]
-                set_visible: model.config.read().unwrap().show_lemma() ||model.config.read().unwrap().show_strongs() || model.config.read().unwrap().show_morphs(),
+                set_visible: model.config.read().unwrap().show_lemma()
+                    || model.config.read().unwrap().show_strongs()
+                    || model.config.read().unwrap().show_morphs(),
 
-                gtk::Revealer{
+                gtk::Revealer {
                     set_transition_type: gtk::RevealerTransitionType::SlideDown,
                     set_transition_duration: 350,
 
@@ -104,12 +107,10 @@ impl SimpleComponent for WordModel {
 
                         #[watch]
                         set_markup: &model.get_strongs_markup(),
-
-
                     }
                 },
 
-                 gtk::Revealer{
+                gtk::Revealer {
                     set_transition_type: gtk::RevealerTransitionType::SlideDown,
                     set_transition_duration: 350,
 
@@ -129,7 +130,7 @@ impl SimpleComponent for WordModel {
                     }
                 },
 
-                 gtk::Revealer{
+                gtk::Revealer {
                     set_transition_type: gtk::RevealerTransitionType::SlideDown,
                     set_transition_duration: 350,
 
@@ -137,8 +138,8 @@ impl SimpleComponent for WordModel {
                     set_reveal_child: model.should_reveal_morphs(),
 
                     #[local_ref]
-                        morph_box -> gtk::Box {},
-                    }
+                    morph_box -> gtk::Box {},
+                }
             }
         }
     }
@@ -148,22 +149,21 @@ impl SimpleComponent for WordModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let is_christ_red = init.0.is_red && init.1.read().unwrap().christ_words_red();
+
         let model = Self {
             data: init.0,
             config: init.1,
             text_direction: init.2,
             annotation: init.3,
-            red_word: false,
+            red_word: is_christ_red,
         };
 
         let morph_box = model.get_morphs_widget();
-
         let widgets = view_output!();
 
-        let word_wrapper = widgets.word_wrapper.clone();
-
         if model.data.note.is_some() {
-            word_wrapper.append(&model.attach_note());
+            widgets.word_wrapper.append(&model.attach_note());
         }
 
         ComponentParts { model, widgets }
@@ -173,6 +173,7 @@ impl SimpleComponent for WordModel {
         match msg {
             WordModelInput::UpdateConfig(new_config) => {
                 self.config = new_config;
+                self.red_word = self.data.is_red && self.config.read().unwrap().christ_words_red();
             }
             WordModelInput::UpdateAnnotation(annotation) => {
                 self.annotation = annotation;
@@ -186,7 +187,7 @@ impl SimpleComponent for WordModel {
                 }
                 let _ = sender.output(WordModelOutput::LookUp(DictionaryQuery {
                     word: self.data.text.clone(),
-                    strongs: strongs,
+                    strongs,
                     language: self.data.language.clone(),
                 }));
             }
@@ -197,49 +198,62 @@ impl SimpleComponent for WordModel {
 impl WordModel {
     fn render_word(&self) -> String {
         let escaped = gtk::glib::markup_escape_text(&self.data.text);
-
         let mut content = escaped.to_string();
 
-        if self.data.is_red && self.config.read().unwrap().christ_words_red() {
+        let config_guard = self.config.read().unwrap();
+
+        // 1. Words of Christ in Red
+        if self.data.is_red && config_guard.christ_words_red() {
             content = format!("<span color='#ed333b'>{}</span>", content);
-           //self.red_word = true;
         }
 
-        if self.data.is_italic {
+        // 2. Formatting Added Words (Supplied Text)
+        if self.data.is_added {
+            match config_guard.added_style() {
+                AddedWordStyle::Italic => {
+                    content = format!("<i>{}</i>", content);
+                }
+                AddedWordStyle::Brackets => {
+                    if self.data.is_first_added && self.data.is_last_added {
+                        content = format!("[{}]", content);
+                    } else if self.data.is_first_added {
+                        content = format!("[{}", content);
+                    } else if self.data.is_last_added {
+                        content = format!("{}]", content);
+                    }
+                }
+            }
+        }
+
+        // 3. Native Italics
+        if self.data.is_italic && !self.data.is_added {
             content = format!("<i>{}</i>", content);
         }
 
-        if self.config.read().unwrap().bold_font() {
+        // 4. Bold Settings
+        if config_guard.bold_font() || self.data.is_bold_text {
             content = format!("<b>{}</b>", content);
         }
 
+        // 5. Section Titles
         if self.data.is_title {
             content = format!("<span size='large'><b>{}</b></span>", content);
         }
 
-        
-        // match self.config.read().unwrap().added_style() {
-        //     AddedWordStyle::Italic => {
-        //         content = format!("<i>{}</i>", content);
-        //     },
-        //     AddedWordStyle::Brackets => {
-        //         content = format!("[{}]", content);
-        //     },
-        // }
-
-        match self.config.read().unwrap().font() {
+        // 6. Font Family and Text Size Packaging
+        match config_guard.font() {
             AvailableFonts::System => {
                 format!(
                     "<span size='{}'>{}</span>",
-                    self.config.read().unwrap().pango_text_size(),
+                    config_guard.pango_text_size(),
                     content
                 )
             }
             _ => {
                 format!(
                     "<span size='{}' face='{}'>{}</span>",
-                    self.config.read().unwrap().pango_text_size(),
-                    self.config.read().unwrap().font().to_string(),
+                    config_guard.pango_text_size(),
+                    config_guard.font().to_string(),
                     content,
                 )
             }
@@ -266,17 +280,19 @@ impl WordModel {
             ),
         };
 
-        note_label.set_markup(&note_markup.as_str());
+        note_label.set_markup(&note_markup);
 
         let motion = gtk::EventControllerMotion::new();
         motion.connect_enter(|motion, _, _| {
-            let widget = motion.widget().unwrap();
-            widget.set_cursor_from_name(Some("pointer"));
+            if let Some(widget) = motion.widget() {
+                widget.set_cursor_from_name(Some("pointer"));
+            }
         });
 
         motion.connect_leave(|motion| {
-            let widget = motion.widget().unwrap();
-            widget.set_cursor(None);
+            if let Some(widget) = motion.widget() {
+                widget.set_cursor(None);
+            }
         });
 
         note_label.add_controller(motion);
@@ -295,13 +311,10 @@ impl WordModel {
             .margin_end(5)
             .build();
 
-        popover_label.set_markup(
-            format!(
-                "<span color='#d71452'>{}</span>",
-                self.data.note.clone().unwrap_or("".to_string())
-            )
-            .as_str(),
-        );
+        popover_label.set_markup(&format!(
+            "<span color='#d71452'>{}</span>",
+            self.data.note.as_deref().unwrap_or("")
+        ));
         popover.set_child(Some(&popover_label));
         popover.set_parent(&note_label);
 
@@ -346,14 +359,12 @@ impl WordModel {
     }
 
     fn get_lemma_markup(&self) -> String {
-        let mut mark_up = String::new();
-        if let Some(lex) = self.data.lex.clone() {
-            if let Some(lemma) = lex.lemma {
-                mark_up = format!("<span  size='small' color='#ed10a3'>{}</span>", lemma);
+        if let Some(lex) = &self.data.lex {
+            if let Some(lemma) = &lex.lemma {
+                return format!("<span size='small' color='#ed10a3'>{}</span>", lemma);
             }
         }
-
-        mark_up
+        String::new()
     }
 
     fn should_reveal_morphs(&self) -> bool {

@@ -1,9 +1,7 @@
 use adw::prelude::*;
 use relm4::prelude::*;
-use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery;
-use xbible_engine::engines::module_engine::module_engine_extensions::module_engine_module_content_ext::Section;
 use xbible_engine::engines::module_engine::sword_module::module::SwordModule;
 use xbible_engine::engines::module_engine::sword_module::module_book::ModuleBook;
 use xbible_engine::engines::xbible_engine::engine::XBibleEngine;
@@ -37,9 +35,6 @@ pub struct BiblePage {
     pub(crate) customize_theme_popup: Option<Controller<CustomizeThemePopup>>,
     pub(crate) annotations: Annotations,
 
-    pub(crate) pending_sections: VecDeque<Section>,
-    pub(crate) total_sections_to_load: usize,
-
     pub(crate) current_book: Option<ModuleBook>,
     pub(crate) current_chapter: Option<i32>,
     pub(crate) is_loading: bool,
@@ -54,9 +49,7 @@ pub enum StudyInput {
     SetChapter(i32),
     ToggleDisplay(VerseInputMessage),
     SetConfig(TextConfig),
-    ReferenceLoaded(Vec<Section>),
     HeaderStateChanged(HeaderState),
-    ProcessQueue,
     FinishedLoading,
     OpenCustomizethemePopup,
     CloseCustomizethemePopup,
@@ -83,7 +76,6 @@ impl Component for BiblePage {
             #[wrap(Some)]
             set_child = &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
-                
 
                 #[name="page_overlay"]
                 gtk::Overlay {
@@ -94,47 +86,44 @@ impl Component for BiblePage {
                         &model.make_css_preview_clss(model.config.read().unwrap().theme())
                     ],
 
-                 gtk::Box {
-                    set_orientation: gtk::Orientation::Vertical,
-                    set_halign: gtk::Align::Fill,
-                    set_hexpand: true,
-
-                    
-
-                    #[name="loading"]
                     gtk::Box {
-                        #[watch]
-                        set_visible: model.is_loading,
-                        set_height_request: 2,
+                        set_orientation: gtk::Orientation::Vertical,
                         set_halign: gtk::Align::Fill,
                         set_hexpand: true,
-                        add_css_class: "loading-line-pulse",
-                    },
 
-                    gtk::ScrolledWindow {
-                        set_vexpand: true,
-                        set_hexpand: true,
-                        set_hscrollbar_policy: gtk::PolicyType::Never,
+                        #[name="loading"]
+                        gtk::Box {
+                            #[watch]
+                            set_visible: model.is_loading,
+                            set_height_request: 2,
+                            set_halign: gtk::Align::Fill,
+                            set_hexpand: true,
+                            add_css_class: "loading-line-pulse",
+                        },
 
-                        #[local_ref]
-                        section_list -> gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_margin_all: 30,
+                        gtk::ScrolledWindow {
+                            set_vexpand: true,
+                            set_hexpand: true,
+                            set_hscrollbar_policy: gtk::PolicyType::Never,
+
+                            #[local_ref]
+                            section_list -> gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_margin_all: 30,
+                            },
                         },
                     },
-                },
 
-                #[name = "dim_scrim"]
-                add_overlay = &gtk::Box {
-                    add_css_class: "dim-scrim",
-                    set_visible: false,
-                    set_can_target: false,
-                },
+                    #[name = "dim_scrim"]
+                    add_overlay = &gtk::Box {
+                        add_css_class: "dim-scrim",
+                        set_visible: false,
+                        set_can_target: false,
+                    },
 
-                add_overlay = model.expanding_theme_menu.widget(){
-                    set_margin_all: 25,
-                },
-
+                    add_overlay = model.expanding_theme_menu.widget() {
+                        set_margin_all: 25,
+                    },
                 }
             }
         }
@@ -145,20 +134,25 @@ impl Component for BiblePage {
         _root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        info!("[BiblePage] Initializing BiblePage component");
         let engine = init;
-          info!("reached bible page init");
 
         // 1. Setup Sections Factory
         let section_list = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let sections = FactoryVecDeque::builder()
             .launch(section_list.clone())
             .forward(sender.output_sender(), move |message| match message {
-                SectionOutput::Lookup(query) => StudyPageOutput::LookupSelectedStrong(query),
+                SectionOutput::Lookup(query) => {
+                    debug!("[BiblePage] Forwarding Strong's lookup query: {:?}", query);
+                    StudyPageOutput::LookupSelectedStrong(query)
+                }
             });
 
         // 2. Load Saved Session / Resolve Active Module
         let saved_state = BiblePageSettings::load();
+        debug!("[BiblePage] Loaded saved state: {:?}", saved_state);
         let modules = engine.get_bible_modules();
+        info!("[BiblePage] Retrieved {} Bible modules", modules.len());
 
         let active_module = if let Some(saved_name) = saved_state.last_module {
             modules.iter().find(|m| m.name == saved_name).cloned()
@@ -172,9 +166,10 @@ impl Component for BiblePage {
         let mut module_books = Vec::new();
 
         if let Some(ref m) = active_module {
+            info!("[BiblePage] Active module set to: {}", m.name);
             module_books = engine.get_books(&m.name);
+            debug!("[BiblePage] Module {} contains {} books", m.name, module_books.len());
 
-            // Attempt saved book, or fallback to first book in module
             active_book = saved_state
                 .last_book
                 .as_ref()
@@ -182,7 +177,6 @@ impl Component for BiblePage {
                 .or_else(|| module_books.first().cloned());
 
             if let Some(ref book) = active_book {
-                // Find matching chapter or fallback to book's first chapter
                 if let Some(saved_c) = saved_state.last_chapter {
                     if book.chapters.iter().any(|c| c.number == saved_c) {
                         active_chapter = Some(saved_c);
@@ -192,13 +186,14 @@ impl Component for BiblePage {
                     active_chapter = book.chapters.first().map(|c| c.number);
                 }
             }
-        }
-
-        if active_module.is_none() {
-            eprintln!("No modules found. Please install a SWORD module.");
+        } else {
+            warn!("[BiblePage] No SWORD modules found! Please install a SWORD module.");
         }
 
         let config = Arc::new(RwLock::new(PageDisplayConfig::new()));
+        let annotations = AnnotationSettings::load_all();
+        debug!("[BiblePage] Annotations loaded successfully");
+
         let model = BiblePage {
             engine,
             module: active_module,
@@ -207,10 +202,8 @@ impl Component for BiblePage {
             sections,
             config: config.clone(),
             customize_theme_popup: None,
-            annotations: AnnotationSettings::load_all(),
+            annotations,
             is_loading: false,
-            pending_sections: VecDeque::new(),
-            total_sections_to_load: 0,
             expanding_theme_menu: ExpandingThemeMenu::builder().launch(config).forward(
                 sender.input_sender(),
                 |output| match output {
@@ -225,18 +218,12 @@ impl Component for BiblePage {
 
         let widgets = view_output!();
 
-        // Populate initial UI widgets
-        // Self::populate_version_grid(&widgets, &modules, sender.clone());
-        // Self::populate_book_grid(&widgets, &module_books, sender.clone());
-        // let chapter_count = model.current_book.as_ref().map(|b| b.chapters.len() as i32).unwrap_or(0);
-        // Self::populate_chapter_grid(&widgets, sender.clone(), chapter_count);
-
-        // Notify theme menu of initial navigation sensitivity
         model.update_nav_sensitivity();
 
-        // Load initial content
+        // Load initial content directly
         if let (Some(book), Some(chapter)) = (&model.current_book, model.current_chapter) {
             let initial_ref = format!("{} {}", book.name, chapter);
+            info!("[BiblePage] Triggering initial reference load: {}", initial_ref);
             sender.input(StudyInput::LoadReference(initial_ref));
         }
 
@@ -250,65 +237,49 @@ impl Component for BiblePage {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        debug!("[BiblePage] Received StudyInput message: {:?}", message);
+
         match message {
             StudyInput::SetModule(module) => {
+                info!("[BiblePage] Switching module to: {}", module.name);
                 let books = self.engine.get_books(&module.name);
                 self.module = Some(module);
-                
-                // Fallback to first book and first chapter of new module
+
                 self.current_book = books.first().cloned();
                 self.current_chapter = self
                     .current_book
                     .as_ref()
                     .and_then(|b| b.chapters.first().map(|c| c.number));
 
-                // widgets.version_label.set_label(
-                //     self.module.as_ref().map(|m| m.name.as_str()).unwrap_or(""),
-                // );
-
-                // Update dependent popovers
-                let modules = self.engine.get_bible_modules();
-                // Self::populate_version_grid(widgets, &modules, sender.clone());
-                // Self::populate_book_grid(widgets, &books, sender.clone());
-
-                // let chapter_count = self.current_book.as_ref().map(|b| b.chapters.len() as i32).unwrap_or(0);
-                // Self::populate_chapter_grid(widgets, sender.clone(), chapter_count);
-
                 self.update_nav_sensitivity();
                 self.load_current_reference(sender);
             }
 
             StudyInput::SetBook(book) => {
+                info!("[BiblePage] Switching book to: {}", book.name);
                 self.current_book = Some(book.clone());
                 self.current_chapter = book.chapters.first().map(|c| c.number);
 
-                // widgets.book_label.set_label(&book.name);
-                // widgets.chapter_label.set_label(
-                //     &self
-                //         .current_chapter
-                //         .map(|c| format!("Chapter {c}"))
-                //         .unwrap_or_default(),
-                // );
-
-                // Self::populate_chapter_grid(widgets, sender.clone(), book.chapters.len() as i32);
                 self.update_nav_sensitivity();
                 self.load_current_reference(sender);
             }
 
             StudyInput::SetChapter(chapter) => {
+                info!("[BiblePage] Switching chapter to: {}", chapter);
                 self.current_chapter = Some(chapter);
-                //widgets.chapter_label.set_label(&format!("Chapter {}", chapter));
 
                 self.update_nav_sensitivity();
                 self.load_current_reference(sender);
             }
 
             StudyInput::NextChapter => {
+                debug!("[BiblePage] Navigating to Next Chapter");
                 let (Some(module), Some(curr_book), Some(curr_chap)) = (
                     self.module.as_ref(),
                     self.current_book.as_ref(),
                     self.current_chapter,
                 ) else {
+                    warn!("[BiblePage] NextChapter triggered without active module/book/chapter");
                     return;
                 };
 
@@ -319,11 +290,9 @@ impl Component for BiblePage {
 
                 if let Some(c_idx) = curr_book.chapters.iter().position(|c| c.number == curr_chap) {
                     if c_idx + 1 < curr_book.chapters.len() {
-                        // Move to next chapter in current book
                         let next_chap = curr_book.chapters[c_idx + 1].number;
                         sender.input(StudyInput::SetChapter(next_chap));
                     } else if b_idx + 1 < books.len() {
-                        // Move to first chapter of next book
                         let next_book = books[b_idx + 1].clone();
                         sender.input(StudyInput::SetBook(next_book));
                     }
@@ -331,11 +300,13 @@ impl Component for BiblePage {
             }
 
             StudyInput::PreviousChapter => {
+                debug!("[BiblePage] Navigating to Previous Chapter");
                 let (Some(module), Some(curr_book), Some(curr_chap)) = (
                     self.module.as_ref(),
                     self.current_book.as_ref(),
                     self.current_chapter,
                 ) else {
+                    warn!("[BiblePage] PreviousChapter triggered without active module/book/chapter");
                     return;
                 };
 
@@ -346,21 +317,15 @@ impl Component for BiblePage {
 
                 if let Some(c_idx) = curr_book.chapters.iter().position(|c| c.number == curr_chap) {
                     if c_idx > 0 {
-                        // Move to previous chapter in current book
                         let prev_chap = curr_book.chapters[c_idx - 1].number;
                         sender.input(StudyInput::SetChapter(prev_chap));
                     } else if b_idx > 0 {
-                        // Move to last chapter of previous book
                         let prev_book = books[b_idx - 1].clone();
                         let last_chap = prev_book.chapters.last().map(|c| c.number).unwrap_or(1);
-                        
+
                         self.current_book = Some(prev_book.clone());
                         self.current_chapter = Some(last_chap);
 
-                        // widgets.book_label.set_label(&prev_book.name);
-                        // widgets.chapter_label.set_label(&format!("Chapter {}", last_chap));
-
-                        // Self::populate_chapter_grid(widgets, sender.clone(), prev_book.chapters.len() as i32);
                         self.update_nav_sensitivity();
                         self.load_current_reference(sender);
                     }
@@ -368,50 +333,45 @@ impl Component for BiblePage {
             }
 
             StudyInput::LoadReference(reference) => {
+                info!("[BiblePage] Loading reference: {}", reference);
                 self.is_loading = true;
                 widgets.loading.set_visible(self.is_loading);
-                self.sections.guard().clear();
+
+                // Clear previous Factory items cleanly without scheduling idle callbacks
+                let mut guard = self.sections.guard();
+                let prev_count = guard.len();
+                guard.clear();
+                debug!("[BiblePage] Cleared {} existing section widgets from FactoryVecDeque", prev_count);
 
                 if let Some(ref module) = self.module {
+                    debug!("[BiblePage] Querying C FFI for reference '{}' in module '{}'", reference, module.name);
                     let sections = self.engine.get_chapter_content(&module.name, &reference);
-                    sender.input(StudyInput::ReferenceLoaded(sections));
-                }
-            }
-
-            StudyInput::ReferenceLoaded(sections) => {
-                self.total_sections_to_load = sections.len();
-                self.pending_sections = VecDeque::from(sections);
-                sender.input(StudyInput::ProcessQueue);
-            }
-
-            StudyInput::ProcessQueue => {
-                let mut guard = self.sections.guard();
-
-                for _ in 0..5 {
-                    if let Some(section) = self.pending_sections.pop_front() {
-                        guard.push_back((section, self.config.clone(), self.annotations.clone()));
+                    info!("[BiblePage] Retrieved {} sections from engine. Rendering to Factory...", sections.len());
+                    //let sections = Vec::new(); // Placeholder for actual section retrieval logic
+                    // Directly populate factory in one pass to avoid GLib idle task loops
+                    for section in sections {
+                        guard.push_back((
+                            section,
+                            self.config.clone(),
+                            self.annotations.clone(),
+                        ));
                     }
+                } else {
+                    warn!("[BiblePage] Cannot load reference '{}': No module set", reference);
                 }
 
-                if !self.pending_sections.is_empty() {
-                    let sender = sender.clone();
-                    glib::idle_add_local(move || {
-                        sender.input(StudyInput::ProcessQueue);
-                        glib::ControlFlow::Break
-                    });
-                } else {
-                    sender.input(StudyInput::FinishedLoading);
-                }
+                sender.input(StudyInput::FinishedLoading);
             }
 
             StudyInput::FinishedLoading => {
+                info!("[BiblePage] Finished loading reference. Resetting loading indicator.");
                 self.is_loading = false;
                 widgets.loading.set_visible(self.is_loading);
-                self.total_sections_to_load = 0;
 
                 if let (Some(module), Some(book)) =
                     (self.module.as_ref(), self.current_book.as_ref())
                 {
+                    debug!("[BiblePage] Saving state: Module={}, Book={}, Chapter={:?}", module.name, book.name, self.current_chapter);
                     BiblePageSettings::save(BiblePageState {
                         last_module: Some(module.name.clone()),
                         last_book: Some(book.name.clone()),
@@ -421,6 +381,7 @@ impl Component for BiblePage {
             }
 
             StudyInput::OpenCustomizethemePopup => {
+                info!("[BiblePage] Opening Theme Customization Popup");
                 let controller = CustomizeThemePopup::builder()
                     .launch((self.config.clone(), self.engine.clone()))
                     .forward(sender.input_sender(), |msg| match msg {
@@ -439,12 +400,14 @@ impl Component for BiblePage {
             }
 
             StudyInput::CloseCustomizethemePopup => {
+                info!("[BiblePage] Closing Theme Customization Popup");
                 if let Some(c) = self.customize_theme_popup.take() {
                     c.widget().close();
                 }
             }
 
             StudyInput::ToggleDisplay(msg) => {
+                debug!("[BiblePage] Applying display message: {:?}", msg);
                 self.config.write().unwrap().apply_message(&msg);
                 for i in 0..self.sections.len() {
                     self.sections
@@ -458,6 +421,7 @@ impl Component for BiblePage {
             }
 
             StudyInput::SetConfig(config) => {
+                debug!("[BiblePage] Setting new text configuration");
                 sender.input(StudyInput::ToggleDisplay(
                     VerseInputMessage::UpdateDisplayConf(config),
                 ));
@@ -466,13 +430,18 @@ impl Component for BiblePage {
             StudyInput::DimBackground(dim) => {
                 widgets.dim_scrim.set_visible(dim);
             }
+
             StudyInput::HeaderStateChanged(state) => {
+                info!("[BiblePage] Header state changed: Module={:?}, Book={:?}, Chapter={:?}", 
+                    state.module.as_ref().map(|m| &m.name), 
+                    state.book.as_ref().map(|b| &b.name), 
+                    state.chapter
+                );
                 self.module = state.module.clone();
                 self.current_book = state.book.clone();
                 self.current_chapter = state.chapter;
                 self.load_current_reference(sender);
-
-            },
+            }
         }
     }
 }
@@ -480,7 +449,11 @@ impl Component for BiblePage {
 impl BiblePage {
     fn load_current_reference(&mut self, sender: ComponentSender<Self>) {
         if let (Some(book), Some(chap)) = (&self.current_book, self.current_chapter) {
-            sender.input(StudyInput::LoadReference(format!("{} {}", book.name, chap)));
+            let reference = format!("{} {}", book.name, chap);
+            debug!("[BiblePage] Requesting reference load for: {}", reference);
+            sender.input(StudyInput::LoadReference(reference));
+        } else {
+            warn!("[BiblePage] Cannot load reference: Book or chapter missing (Book: {:?}, Chapter: {:?})", self.current_book, self.current_chapter);
         }
     }
 
@@ -513,6 +486,7 @@ impl BiblePage {
         let has_prev = !(is_first_book && is_first_chap);
         let has_next = !(is_last_book && is_last_chap);
 
+        debug!("[BiblePage] Updating nav sensitivity: HasPrev={}, HasNext={}", has_prev, has_next);
         self.expanding_theme_menu.emit(ThemeMenuInput::SetNavigationState {
             has_prev,
             has_next,

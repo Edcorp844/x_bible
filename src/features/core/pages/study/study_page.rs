@@ -79,6 +79,7 @@ impl Component for StudyPage {
             None
         };
 
+
         let mut model = StudyPage {
             engine: engine.clone(),
             tabs: Vec::new(),
@@ -93,7 +94,6 @@ impl Component for StudyPage {
             model.refresh_all_grids(&widgets, sender.clone());
         }
 
-        info!("StudyPage initialized with {} tabs", model.tabs.len());
         ComponentParts { model, widgets }
     }
 

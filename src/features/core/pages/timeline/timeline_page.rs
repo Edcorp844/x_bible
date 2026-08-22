@@ -67,14 +67,14 @@ impl Component for TimelinePage {
     view! {
         #[root]
         adw::NavigationPage {
-            set_title: "Timeline",
+            set_title: "Bible Timeline",
 
             #[wrap(Some)]
             set_child = &adw::ToolbarView {
                 add_top_bar = &adw::HeaderBar {
                     #[wrap(Some)]
-                    set_title_widget = &adw::WindowTitle { set_title: "Timeline" },
-                    set_show_title: false,
+                    set_title_widget = &adw::WindowTitle { set_title: "Bible Timeline" },
+                    set_show_title: true,
                     add_css_class: "flat",
 
                     pack_start = &gtk::ToggleButton {

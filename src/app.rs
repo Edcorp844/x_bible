@@ -16,7 +16,7 @@ use crate::features::core::{
     pages::{
         audio_bible::audio_bible_page::AudioBiblePage,
         library::library_page::{LibraryPage, LibraryPageCategory, LibraryPageOutput},
-        study::study_page::{StudyPage, StudyPageOutPut},
+        study::study_page::{StudyPage, StudyPageOutput},
     },
 };
 
@@ -215,9 +215,9 @@ impl SimpleComponent for AppModel {
 
                 let bible_page = PageController::Bible(
                     StudyPage::builder()
-                        .launch((engine_arc.clone(), self.is_sidebar_visible))
+                        .launch((engine_arc.clone(), self.is_sidebar_visible, vec!["John 3:16".into(), "Genesis 2:22".into()]))
                         .forward(sender.input_sender(), |message| match message {
-                            StudyPageOutPut::ToggleSidebar => AppInputMessage::ToggleSidebar,
+                            StudyPageOutput::ToggleSidebar => AppInputMessage::ToggleSidebar,
                         }),
                 );
                 self.pages_cache
@@ -241,9 +241,9 @@ impl SimpleComponent for AppModel {
                         NavigationPage::Bible => {
                             let bible_page = PageController::Bible(
                                 StudyPage::builder()
-                                    .launch((active_engine.clone(), self.is_sidebar_visible))
+                                    .launch((active_engine.clone(), self.is_sidebar_visible, vec!["John 3:16".into(), "Genesis 2:22".into()]))
                                     .forward(sender.input_sender(), |message| match message {
-                                        StudyPageOutPut::ToggleSidebar => {
+                                        StudyPageOutput::ToggleSidebar => {
                                             AppInputMessage::ToggleSidebar
                                         }
                                     }),

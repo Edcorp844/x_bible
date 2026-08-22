@@ -27,6 +27,7 @@ use crate::features::bible::components::page_theme::theme_button::{
     ExpandingThemeMenu, ThemeMenuInput, ThemeMenuOutput,
 };
 use crate::features::core::display_configurations::config::TextConfig;
+use crate::features::core::pages::study::bible_page_component::biblepage_root::HeaderState;
 
 pub struct BiblePage {
     pub(crate) engine: Arc<XBibleEngine>,
@@ -54,6 +55,7 @@ pub enum StudyInput {
     ToggleDisplay(VerseInputMessage),
     SetConfig(TextConfig),
     ReferenceLoaded(Vec<Section>),
+    HeaderStateChanged(HeaderState),
     ProcessQueue,
     FinishedLoading,
     OpenCustomizethemePopup,
@@ -81,7 +83,7 @@ impl Component for BiblePage {
             #[wrap(Some)]
             set_child = &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
-                set_margin_top: 20,
+                
 
                 #[name="page_overlay"]
                 gtk::Overlay {
@@ -97,101 +99,7 @@ impl Component for BiblePage {
                     set_halign: gtk::Align::Fill,
                     set_hexpand: true,
 
-                    gtk::Box {
-                        add_css_class: "linked",
-                        add_css_class: "rounded",
-                        set_halign: gtk::Align::Center,
-                        set_margin_bottom: 10,
-
-                        gtk::MenuButton {
-                            set_tooltip_text: Some("Select Version"),
-                            #[wrap(Some)]
-                            set_child = &gtk::Box {
-                                set_spacing: 4,
-                                #[name = "version_label"]
-                                gtk::Label { set_label: model.module.as_ref().map(|m| m.name.as_str()).unwrap_or(""),},
-                                gtk::Image { set_icon_name: Some("pan-down-symbolic") },
-                            },
-
-                            #[name = "version_popover"]
-                            #[wrap(Some)]
-                            set_popover = &gtk::Popover {
-                                set_autohide: true,
-                                gtk::ScrolledWindow {
-                                    set_hscrollbar_policy: gtk::PolicyType::Never,
-                                    set_min_content_width: 600,
-                                    set_min_content_height: 400,
-                                    set_max_content_height: 600,
-                                    #[name = "bible_grid"]
-                                    gtk::Box {
-                                        set_orientation: gtk::Orientation::Vertical,
-                                    },
-                                },
-                            },
-                        },
-
-                        gtk::MenuButton {
-                            set_tooltip_text: Some("Select Book"),
-                            #[name = "book_popover"]
-                            #[wrap(Some)]
-                            set_popover = &gtk::Popover {
-                                gtk::ScrolledWindow {
-                                    set_hscrollbar_policy: gtk::PolicyType::Never,
-                                    set_min_content_width: 600,
-                                    set_min_content_height: 400,
-                                    set_max_content_height: 600,
-                                    
-                                    #[name = "book_grid"]
-                                    gtk::FlowBox {
-                                        set_max_children_per_line: 4,
-                                        set_min_children_per_line: 4,
-                                        set_selection_mode: gtk::SelectionMode::None,
-                                        set_column_spacing: 8,
-                                        set_row_spacing: 8,
-                                    },
-                                        
-                                },
-                            },
-                            #[wrap(Some)]
-                            set_child = &gtk::Box {
-                                set_spacing: 4,
-                                #[name = "book_label"]
-                                gtk::Label { set_label: model.current_book.as_ref().map(|b| b.name.as_str()).unwrap_or("")},
-                                gtk::Image { set_icon_name: Some("pan-down-symbolic") },
-                            },
-                        },
-
-                        gtk::MenuButton {
-                            set_tooltip_text: Some("Select Chapter"),
-                            #[name = "chapter_popover"]
-                            #[wrap(Some)]
-                            set_popover = &gtk::Popover {
-                                gtk::ScrolledWindow {
-                                    set_hscrollbar_policy: gtk::PolicyType::Never,
-                                    set_min_content_width: 300,
-                                    set_min_content_height: 400,
-                                    set_max_content_height: 600,
-                                    #[name = "chapter_grid"]
-                                    gtk::FlowBox {
-                                        set_valign: gtk::Align::Start,
-                                        set_max_children_per_line: 5,
-                                        set_min_children_per_line: 5,
-                                        set_selection_mode: gtk::SelectionMode::None,
-                                        set_column_spacing: 6,
-                                        set_row_spacing: 6,
-                                        set_margin_all: 12,
-                                    },
-                                },
-                            },
-                            #[wrap(Some)]
-                            set_child = &gtk::Box {
-                                set_spacing: 4,
-                                #[name = "chapter_label"]
-                                gtk::Label { set_label: &model.current_chapter.as_ref().map(|c| format!("Chapter {c}")).unwrap_or_default(),},
-                                gtk::Image { set_icon_name: Some("pan-down-symbolic") },
-                            },
-                        },
-                    },
+                    
 
                     #[name="loading"]
                     gtk::Box {
@@ -317,10 +225,10 @@ impl Component for BiblePage {
         let widgets = view_output!();
 
         // Populate initial UI widgets
-        Self::populate_version_grid(&widgets, &modules, sender.clone());
-        Self::populate_book_grid(&widgets, &module_books, sender.clone());
-        let chapter_count = model.current_book.as_ref().map(|b| b.chapters.len() as i32).unwrap_or(0);
-        Self::populate_chapter_grid(&widgets, sender.clone(), chapter_count);
+        // Self::populate_version_grid(&widgets, &modules, sender.clone());
+        // Self::populate_book_grid(&widgets, &module_books, sender.clone());
+        // let chapter_count = model.current_book.as_ref().map(|b| b.chapters.len() as i32).unwrap_or(0);
+        // Self::populate_chapter_grid(&widgets, sender.clone(), chapter_count);
 
         // Notify theme menu of initial navigation sensitivity
         model.update_nav_sensitivity();
@@ -353,17 +261,17 @@ impl Component for BiblePage {
                     .as_ref()
                     .and_then(|b| b.chapters.first().map(|c| c.number));
 
-                widgets.version_label.set_label(
-                    self.module.as_ref().map(|m| m.name.as_str()).unwrap_or(""),
-                );
+                // widgets.version_label.set_label(
+                //     self.module.as_ref().map(|m| m.name.as_str()).unwrap_or(""),
+                // );
 
                 // Update dependent popovers
                 let modules = self.engine.get_bible_modules();
-                Self::populate_version_grid(widgets, &modules, sender.clone());
-                Self::populate_book_grid(widgets, &books, sender.clone());
+                // Self::populate_version_grid(widgets, &modules, sender.clone());
+                // Self::populate_book_grid(widgets, &books, sender.clone());
 
-                let chapter_count = self.current_book.as_ref().map(|b| b.chapters.len() as i32).unwrap_or(0);
-                Self::populate_chapter_grid(widgets, sender.clone(), chapter_count);
+                // let chapter_count = self.current_book.as_ref().map(|b| b.chapters.len() as i32).unwrap_or(0);
+                // Self::populate_chapter_grid(widgets, sender.clone(), chapter_count);
 
                 self.update_nav_sensitivity();
                 self.load_current_reference(sender);
@@ -373,22 +281,22 @@ impl Component for BiblePage {
                 self.current_book = Some(book.clone());
                 self.current_chapter = book.chapters.first().map(|c| c.number);
 
-                widgets.book_label.set_label(&book.name);
-                widgets.chapter_label.set_label(
-                    &self
-                        .current_chapter
-                        .map(|c| format!("Chapter {c}"))
-                        .unwrap_or_default(),
-                );
+                // widgets.book_label.set_label(&book.name);
+                // widgets.chapter_label.set_label(
+                //     &self
+                //         .current_chapter
+                //         .map(|c| format!("Chapter {c}"))
+                //         .unwrap_or_default(),
+                // );
 
-                Self::populate_chapter_grid(widgets, sender.clone(), book.chapters.len() as i32);
+                // Self::populate_chapter_grid(widgets, sender.clone(), book.chapters.len() as i32);
                 self.update_nav_sensitivity();
                 self.load_current_reference(sender);
             }
 
             StudyInput::SetChapter(chapter) => {
                 self.current_chapter = Some(chapter);
-                widgets.chapter_label.set_label(&format!("Chapter {}", chapter));
+                //widgets.chapter_label.set_label(&format!("Chapter {}", chapter));
 
                 self.update_nav_sensitivity();
                 self.load_current_reference(sender);
@@ -448,10 +356,10 @@ impl Component for BiblePage {
                         self.current_book = Some(prev_book.clone());
                         self.current_chapter = Some(last_chap);
 
-                        widgets.book_label.set_label(&prev_book.name);
-                        widgets.chapter_label.set_label(&format!("Chapter {}", last_chap));
+                        // widgets.book_label.set_label(&prev_book.name);
+                        // widgets.chapter_label.set_label(&format!("Chapter {}", last_chap));
 
-                        Self::populate_chapter_grid(widgets, sender.clone(), prev_book.chapters.len() as i32);
+                        // Self::populate_chapter_grid(widgets, sender.clone(), prev_book.chapters.len() as i32);
                         self.update_nav_sensitivity();
                         self.load_current_reference(sender);
                     }
@@ -557,6 +465,13 @@ impl Component for BiblePage {
             StudyInput::DimBackground(dim) => {
                 widgets.dim_scrim.set_visible(dim);
             }
+            StudyInput::HeaderStateChanged(state) => {
+                self.module = state.module.clone();
+                self.current_book = state.book.clone();
+                self.current_chapter = state.chapter;
+                self.load_current_reference(sender);
+
+            },
         }
     }
 }

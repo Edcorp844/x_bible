@@ -321,7 +321,6 @@ impl Component for VerseModel {
 
             // ===== verse menu ======
             VerseInputMessage::Highlight(color) => {
-                println!("hightlighting {} with color {}", self.data.osis_id, color);
                 self.annotation.color = Some(color);
                 AnnotationSettings::save_verse(&self.data.osis_id, self.annotation.clone());
 

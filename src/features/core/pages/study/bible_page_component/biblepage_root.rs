@@ -1,15 +1,14 @@
 use adw::prelude::*;
 use std::sync::{Arc, RwLock};
 use xbible_engine::engines::{
-    module_engine::module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery,
-    xbible_engine::engine::XBibleEngine,
+    module_engine::{module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery, sword_module::{module::SwordModule, module_book::ModuleBook}}, xbible_engine::engine::XBibleEngine,
 };
 
 use relm4::{Component, ComponentParts, ComponentSender, Controller, prelude::*};
 
 use crate::features::{
     bible::components::page::{
-        biblepage_model::{BiblePage, StudyPageOutput},
+        biblepage_model::{BiblePage, StudyInput, StudyPageOutput},
         helpers::PageDisplayConfig,
     },
     core::display_configurations::config::TextConfig,
@@ -24,12 +23,23 @@ pub struct BiblePageRoot {
 
 #[derive(Debug)]
 pub enum BiblePageRootInput {
+    HeaderStateChanged(HeaderState),
+    GoToReference(String),
     LookupSelectedWord(DictionaryQuery),
     UpdateTheme,
 }
+#[derive(Debug, Clone)]
+pub struct HeaderState {
+    pub module: Option<SwordModule>,
+    pub book: Option<ModuleBook>,
+    pub chapter: Option<i32>,
+}
+
 #[derive(Debug)]
 pub enum BiblePageRootOutput {
     UpdateTheme,
+    ReferenceChanged(String),
+    HeaderStateChanged(HeaderState), // Add this variant
 }
 
 #[relm4::component(pub)]
@@ -153,6 +163,12 @@ impl Component for BiblePageRoot {
 
                 let _ = sender.output(BiblePageRootOutput::UpdateTheme);
             }
+            BiblePageRootInput::GoToReference(refrence) => {
+                self.bible_page.emit(StudyInput::LoadReference(refrence));
+            }
+            BiblePageRootInput::HeaderStateChanged(header_state) => {
+                 self.bible_page.emit(StudyInput::HeaderStateChanged(header_state.clone()));
+            },
         }
     }
 }

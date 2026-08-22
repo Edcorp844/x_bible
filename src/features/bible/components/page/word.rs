@@ -6,9 +6,8 @@ use xbible_engine::engines::module_engine::module_engine_extensions::{
 
 use crate::features::{
     bible::components::page::{
-        helpers::AvailableFonts, verse_components::verse_annotation::VerseAnnotation,
-    },
-    core::display_configurations::config::TextConfig,
+        helpers::{AddedWordStyle, AvailableFonts}, verse_components::verse_annotation::VerseAnnotation,
+    }, core::display_configurations::config::TextConfig,
 };
 
 
@@ -18,6 +17,7 @@ pub struct WordModel {
     config: TextConfig,
     text_direction: gtk::TextDirection,
     annotation: VerseAnnotation,
+    red_word: bool,
 }
 
 #[derive(Debug)]
@@ -66,8 +66,8 @@ impl SimpleComponent for WordModel {
                     set_xalign: 0.0,
                    #[watch]
                 inline_css: &format!(
-                    "background-color: alpha({}, 0.8); border-radius: 10px;",
-                    model.annotation.color.as_deref().unwrap_or("transparent"),
+                    "background-color: alpha({}, 0.8); border-radius: 10px; color: {}",
+                    model.annotation.color.as_deref().unwrap_or("transparent"), if model.red_word {"var(--red-3)"} else {"var(--window-fg-color)"}
                 ),
 
                 add_controller = gtk::GestureClick {
@@ -153,6 +153,7 @@ impl SimpleComponent for WordModel {
             config: init.1,
             text_direction: init.2,
             annotation: init.3,
+            red_word: false,
         };
 
         let morph_box = model.get_morphs_widget();
@@ -200,7 +201,8 @@ impl WordModel {
         let mut content = escaped.to_string();
 
         if self.data.is_red && self.config.read().unwrap().christ_words_red() {
-            content = format!("<span color='#ef222c'>{}</span>", content);
+            content = format!("<span color='#ed333b'>{}</span>", content);
+           //self.red_word = true;
         }
 
         if self.data.is_italic {
@@ -214,6 +216,16 @@ impl WordModel {
         if self.data.is_title {
             content = format!("<span size='large'><b>{}</b></span>", content);
         }
+
+        
+        // match self.config.read().unwrap().added_style() {
+        //     AddedWordStyle::Italic => {
+        //         content = format!("<i>{}</i>", content);
+        //     },
+        //     AddedWordStyle::Brackets => {
+        //         content = format!("[{}]", content);
+        //     },
+        // }
 
         match self.config.read().unwrap().font() {
             AvailableFonts::System => {

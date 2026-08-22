@@ -6,7 +6,6 @@ use gtk::cairo;
 use gtk::glib;
 use gtk::prelude::*;
 use relm4::prelude::*;
-use relm4::RelmSetChildExt;
 use relm4::{Component, ComponentParts, ComponentSender};
 
 use crate::features::bible::components::page::helpers::AddedWordStyle;
@@ -24,7 +23,7 @@ const EXPAND_MS: f64 = 300.0;
 const COLLAPSE_MS: f64 = 200.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MenuState {
+pub enum MenuState {
     Collapsed,
     Animating,
     Expanded,
@@ -113,7 +112,7 @@ impl Component for ExpandingThemeMenu {
         {
             let progress = progress.clone();
             let hovered_zone = hovered_zone.clone();
-            canvas.set_draw_func(move |area, cr, w, h| {
+            canvas.set_draw_func(move |_area, cr, w, h| {
                 // Read model dynamic states implicitly via closure scope
                 draw_pill_toolbar(
                     cr,
@@ -277,9 +276,30 @@ impl Component for ExpandingThemeMenu {
                 widgets.canvas.queue_draw();
             }
 
-            ThemeMenuInput::ToggleStrongs(_active) => {}
-            ThemeMenuInput::ToggleLemma(_active) => {}
-            ThemeMenuInput::ToggleMorph(_active) => {}
+            ThemeMenuInput::ToggleStrongs(active) => {
+                let msg = if active {
+                    VerseInputMessage::DisableStrongs
+                } else {
+                    VerseInputMessage::DisableStrongs
+                };
+                let _ = sender.output(ThemeMenuOutput::ToggleDisplay(msg));
+            }
+            ThemeMenuInput::ToggleLemma(active) => {
+                let msg = if active {
+                    VerseInputMessage::EnableLemma
+                } else {
+                    VerseInputMessage::DisableLemma
+                };
+                let _ = sender.output(ThemeMenuOutput::ToggleDisplay(msg));
+            }
+            ThemeMenuInput::ToggleMorph(active) => {
+                let msg = if active {
+                    VerseInputMessage::EnableMorphs
+                } else {
+                    VerseInputMessage::DisableMorphs
+                };
+                let _ = sender.output(ThemeMenuOutput::ToggleDisplay(msg));
+            }
             ThemeMenuInput::AddedWordsStyleChanged(_style) => {}
         }
 
@@ -356,6 +376,7 @@ fn draw_pill_toolbar(
     // Hover Highlight Overlays
     if let Some(zone) = hovered_zone {
         let zone_w = w / 3.0;
+        
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.08 * alpha);
         match zone {
             0 if has_prev => {

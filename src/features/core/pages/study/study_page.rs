@@ -1,6 +1,7 @@
 use adw::prelude::*;
 use relm4::prelude::*;
 use std::sync::Arc;
+
 use xbible_engine::engines::{
     module_engine::sword_module::{module::SwordModule, module_book::ModuleBook},
     xbible_engine::engine::XBibleEngine,
@@ -44,7 +45,7 @@ pub enum StudyPageOutput {
 
 #[relm4::component(pub)]
 impl Component for StudyPage {
-    type Init = (Arc<XBibleEngine>, bool, Vec<String>);
+    type Init = (Arc<XBibleEngine>, bool);
     type Input = StudyPageInput;
     type Output = StudyPageOutput;
     type CommandOutput = ();
@@ -54,7 +55,8 @@ impl Component for StudyPage {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let (engine, _is_sidebar_visible, _restored_references) = init;
+        info!("reached study page init");
+        let (engine, _is_sidebar_visible) = init;
 
         let modules = engine.get_bible_modules();
         let first_module = modules.first().cloned();
@@ -91,6 +93,7 @@ impl Component for StudyPage {
             model.refresh_all_grids(&widgets, sender.clone());
         }
 
+        info!("StudyPage initialized with {} tabs", model.tabs.len());
         ComponentParts { model, widgets }
     }
 

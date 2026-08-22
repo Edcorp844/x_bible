@@ -1022,7 +1022,7 @@ impl AudioBiblePage {
                     }
                 }
                 Err(e) => {
-                    println!("[AudioBiblePage] ERROR loading audio module: {:?}", e);
+                    error!("[AudioBiblePage] ERROR loading audio module: {:?}", e);
                     sender_clone.input(AudioBibleInput::ModuleLoaded(false));
                 }
             });

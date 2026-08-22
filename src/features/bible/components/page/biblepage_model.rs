@@ -146,6 +146,7 @@ impl Component for BiblePage {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let engine = init;
+          info!("reached bible page init");
 
         // 1. Setup Sections Factory
         let section_list = gtk::Box::new(gtk::Orientation::Vertical, 0);

@@ -66,7 +66,7 @@ impl SimpleComponent for WordModel {
                     set_xalign: 0.0,
                    #[watch]
                 inline_css: &format!(
-                    "background-color: alpha({}, 0.8); border-radius: 10px; color: {}",
+                    "background-color: alpha({}, 0.8); border-radius: 10px; color: {};",
                     model.annotation.color.as_deref().unwrap_or("transparent"), if model.red_word {"var(--red-3)"} else {"var(--window-fg-color)"}
                 ),
 

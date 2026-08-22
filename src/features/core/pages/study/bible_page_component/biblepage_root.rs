@@ -108,6 +108,7 @@ impl Component for BiblePageRoot {
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
         let engine = init;
+          info!("reached biblepage root init");
 
         let bible_page = BiblePage::builder().launch(engine.clone()).forward(
             sender.input_sender(),

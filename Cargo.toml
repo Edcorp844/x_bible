@@ -4,27 +4,28 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-adw = { version = "0.8.1", package = "libadwaita", features = ["v1_8"] }
-gtk = { version = "0.10.3", package = "gtk4", features = ["v4_12"] }
-relm4 = { version = "0.10.1", features = ["all"] }
-relm4-components = { version = "0.10.1", features = ["libadwaita", "reqwest"] }
+adw = { version = "0.9.2", package = "libadwaita", features = ["v1_8"] }
+gtk = { version = "0.11.4", package = "gtk4", features = ["v4_12"] }
+relm4 = { version = "0.11.0", features = ["all"] }
+relm4-components = { version = "0.11.0", features = ["libadwaita", "reqwest"] }
 reqwest = { version = "0.13.4", features = ["json"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.148"
 thiserror = "2.0.17"
-rusqlite = { version = "0.38.0", features = ["bundled"] }
-sha2 = "0.10.9"
+rusqlite = { version = "0.40.0", features = ["bundled"] }
+sha2 = "0.11.0"
 hex = "0.4.3"
 directories = "6.0.0"
-relm4-icons = "0.10.1"
-glib = "0.21.5"
+relm4-icons = "0.11.0"
+glib = "0.22.8"
 isolang = "2.4.0"
 html2pango = "0.6.0"
 regex = "1.12.3"
 xbible_engine = { git = "https://github.com/Edcorp844/xbible_engine.git", version = "0.1.0" }
 rodio = "0.22.2"
 async-channel = "2.5.0"
+log = "0.4.33"
 
 
 [build-dependencies]
-glib-build-tools = "0.21.0"
+glib-build-tools = "0.22.8"

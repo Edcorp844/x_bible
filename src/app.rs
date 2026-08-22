@@ -92,7 +92,9 @@ impl SimpleComponent for AppModel {
                 #[wrap(Some)]
                 set_sidebar = &gtk::Box {
                     #[local_ref]
-                    sidebar_widget -> adw::NavigationPage {},
+                    sidebar_widget -> adw::NavigationPage {
+                        set_title: "XBible",
+                    },
                 },
 
                 #[wrap(Some)]
@@ -215,7 +217,7 @@ impl SimpleComponent for AppModel {
 
                 let bible_page = PageController::Bible(
                     StudyPage::builder()
-                        .launch((engine_arc.clone(), self.is_sidebar_visible, vec!["John 3:16".into(), "Genesis 2:22".into()]))
+                        .launch((engine_arc.clone(), self.is_sidebar_visible))
                         .forward(sender.input_sender(), |message| match message {
                             StudyPageOutput::ToggleSidebar => AppInputMessage::ToggleSidebar,
                         }),
@@ -241,7 +243,7 @@ impl SimpleComponent for AppModel {
                         NavigationPage::Bible => {
                             let bible_page = PageController::Bible(
                                 StudyPage::builder()
-                                    .launch((active_engine.clone(), self.is_sidebar_visible, vec!["John 3:16".into(), "Genesis 2:22".into()]))
+                                    .launch((active_engine.clone(), self.is_sidebar_visible))
                                     .forward(sender.input_sender(), |message| match message {
                                         StudyPageOutput::ToggleSidebar => {
                                             AppInputMessage::ToggleSidebar

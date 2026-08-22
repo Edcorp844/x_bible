@@ -40,6 +40,7 @@ impl Component for SideBar {
             #[wrap(Some)]
             set_child = &adw::ToolbarView{
                 add_top_bar=&adw::HeaderBar {
+                    
                     set_show_title: true,
                      pack_start = &gtk::Button {
                         set_icon_name: "system-search-symbolic",
@@ -410,4 +411,8 @@ impl SideBar {
             listbox.append(&row);
         }
     }
+
+
+
 }
+

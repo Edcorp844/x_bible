@@ -1,6 +1,9 @@
 use crate::{app::AppModel, features::core::app_menu::menu::AppMenu};
 use adw::prelude::*;
-use relm4::RelmApp; // Essential for trait methods like .connect_notify_local
+use relm4::RelmApp;
+
+#[macro_use]
+extern crate log;
 
 mod app;
 mod features;

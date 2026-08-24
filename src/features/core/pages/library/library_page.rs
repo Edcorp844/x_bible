@@ -1,6 +1,6 @@
 use adw::prelude::*;
 use relm4::{Component, ComponentController, ComponentParts, Controller, prelude::*};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use xbible_engine::engines::{
     module_engine::sword_module::module::SwordModule, xbible_engine::engine::XBibleEngine,
@@ -139,7 +139,7 @@ impl Component for LibraryPage {
 }
 
 impl LibraryPage {
-    fn sync_sections(&mut self, container: &gtk::Box, sender: ComponentSender<Self>) {
+    fn sync_sections(&mut self, container: &gtk::Box, _sender: ComponentSender<Self>) {
         // 1. Clear existing controllers and UI widgets
         self.section_controllers.clear();
         while let Some(child) = container.first_child() {
@@ -170,12 +170,11 @@ impl LibraryPage {
             let section_controller = ModuleSection::builder()
                 .launch(ModuleSectionInit {
                     language_name: lang,
-                    modules, // Ensure this is Vec<SwordModule>
-                })
-                // The 'msg' here is the String coming from ModuleSection::Output
-                .forward(sender.input_sender(), |msg: String| {
-                    LibraryPageInput::ModuleSelected(msg)
-                });
+                    modules,
+                    status_map: HashMap::new(),
+                    is_library_mode: true, // Ensure this is Vec<SwordModule>
+                }).detach();
+                
 
             container.append(section_controller.widget());
             self.section_controllers.push(section_controller);

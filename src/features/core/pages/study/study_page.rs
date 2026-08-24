@@ -55,7 +55,6 @@ impl Component for StudyPage {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        info!("reached study page init");
         let (engine, _is_sidebar_visible) = init;
 
         let modules = engine.get_bible_modules();

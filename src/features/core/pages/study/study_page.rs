@@ -7,14 +7,38 @@ use xbible_engine::engines::{
     xbible_engine::engine::XBibleEngine,
 };
 
-use crate::features::core::pages::study::bible_page_component::biblepage_root::{
-    BiblePageRoot, BiblePageRootInput, BiblePageRootOutput, HeaderState,
+use crate::features::core::pages::study::{
+    bible_page_component::biblepage_root::{
+        BiblePageRoot, BiblePageRootInput, BiblePageRootOutput, HeaderState,
+    }, bible_search::search_page::{SearchPage, SearchPageInput},
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TabKind {
+    Bible,
+    Search,
+}
+
+/// Enum wrapper to support multiple component controllers inside `adw::TabView`
+pub enum TabController {
+    Bible(Controller<BiblePageRoot>),
+    Search(Controller<SearchPage>),
+}
+
+impl TabController {
+    pub fn widget(&self) -> &gtk::Widget {
+        match self {
+            Self::Bible(c) => c.widget().upcast_ref(),
+            Self::Search(c) => c.widget().upcast_ref(),
+        }
+    }
+}
+
 struct TabEntry {
-    controller: Controller<BiblePageRoot>,
+    controller: TabController,
     page: adw::TabPage,
     header_state: HeaderState,
+    kind: TabKind,
 }
 
 pub struct StudyPage {
@@ -22,6 +46,7 @@ pub struct StudyPage {
     tabs: Vec<TabEntry>,
     current_reference: String,
     active_header_state: Option<HeaderState>,
+    search_tab_history: Vec<adw::TabPage>,
 }
 
 #[derive(Debug)]
@@ -79,18 +104,18 @@ impl Component for StudyPage {
             None
         };
 
-
         let mut model = StudyPage {
             engine: engine.clone(),
             tabs: Vec::new(),
             current_reference: String::new(),
             active_header_state: initial_header_state.clone(),
+            search_tab_history: Vec::new(),
         };
 
         let widgets = view_output!();
 
         if let Some(state) = initial_header_state {
-            model.spawn_tab(&widgets.tab_view, &sender, state);
+            model.spawn_tab(&widgets.tab_view, &sender, state, TabKind::Bible);
             model.refresh_all_grids(&widgets, sender.clone());
         }
 
@@ -253,7 +278,7 @@ impl Component for StudyPage {
                             connect_clicked => StudyPageInput::NewTab,
                         },
 
-                         pack_end = &gtk::Button {
+                        pack_end = &gtk::Button {
                             set_icon_name: "edit-find-symbolic",
                             set_valign: gtk::Align::Center,
                             set_tooltip_text: Some("Open Search Tab"),
@@ -280,8 +305,47 @@ impl Component for StudyPage {
         match message {
             StudyPageInput::NewTab => {
                 if let Some(active_state) = self.active_header_state.clone() {
-                    self.spawn_tab(&widgets.tab_view, &sender, active_state);
+                    self.spawn_tab(&widgets.tab_view, &sender, active_state, TabKind::Bible);
                     self.refresh_all_grids(widgets, sender.clone());
+                }
+            }
+
+            StudyPageInput::OpenSearch => {
+                let current_page = widgets.tab_view.selected_page();
+                let current_tab_kind = current_page
+                    .as_ref()
+                    .and_then(|page| self.tabs.iter().find(|t| t.page == *page).map(|t| &t.kind));
+
+                match current_tab_kind {
+                    Some(TabKind::Search) => {
+                        // Currently on a search tab -> Spawn a NEW search tab with active module
+                        if let Some(active_state) = self.active_header_state.clone() {
+                            self.spawn_tab(
+                                &widgets.tab_view,
+                                &sender,
+                                active_state,
+                                TabKind::Search,
+                            );
+                            self.refresh_all_grids(widgets, sender.clone());
+                        }
+                    }
+                    _ => {
+                        // On a Bible tab (or unknown) -> Go to last created search tab if exists
+                        if let Some(last_search_page) = self.search_tab_history.last() {
+                            widgets.tab_view.set_selected_page(last_search_page);
+                        } else {
+                            // No search tab exists -> Spawn first search tab with active module
+                            if let Some(active_state) = self.active_header_state.clone() {
+                                self.spawn_tab(
+                                    &widgets.tab_view,
+                                    &sender,
+                                    active_state,
+                                    TabKind::Search,
+                                );
+                                self.refresh_all_grids(widgets, sender.clone());
+                            }
+                        }
+                    }
                 }
             }
 
@@ -297,9 +361,11 @@ impl Component for StudyPage {
                 if let Some(selected_page) = widgets.tab_view.selected_page() {
                     if let Some(entry) = self.tabs.iter_mut().find(|t| t.page == selected_page) {
                         entry.header_state = state.clone();
-                        let title = Self::format_reference_title(&state);
-                        entry.page.set_title(&title);
-                        self.current_reference = title;
+                        if entry.kind == TabKind::Bible {
+                            let title = Self::format_reference_title(&state);
+                            entry.page.set_title(&title);
+                            self.current_reference = title;
+                        }
                     }
                 }
                 self.active_header_state = Some(state);
@@ -314,9 +380,10 @@ impl Component for StudyPage {
                 if let Some(selected) = widgets.tab_view.selected_page() {
                     selected.set_title(&new_reference);
                     if let Some(entry) = self.tabs.iter().find(|t| t.page == selected) {
-                        entry
-                            .controller
-                            .emit(BiblePageRootInput::GoToReference(new_reference.clone()));
+                        if let TabController::Bible(ref controller) = entry.controller {
+                            controller
+                                .emit(BiblePageRootInput::GoToReference(new_reference.clone()));
+                        }
                     }
                 }
                 self.current_reference = new_reference;
@@ -344,7 +411,7 @@ impl Component for StudyPage {
                     .map(|c| c.number);
 
                 let updated_state = HeaderState {
-                    module: Some(sword_module),
+                    module: Some(sword_module.clone()),
                     book: first_book,
                     chapter: first_chapter,
                 };
@@ -352,12 +419,19 @@ impl Component for StudyPage {
                 let title = Self::format_reference_title(&updated_state);
 
                 if let Some(selected_page) = widgets.tab_view.selected_page() {
-                    selected_page.set_title(&title);
                     if let Some(entry) = self.tabs.iter_mut().find(|t| t.page == selected_page) {
                         entry.header_state = updated_state.clone();
-                        entry
-                            .controller
-                            .emit(BiblePageRootInput::HeaderStateChanged(updated_state.clone()));
+                        match &entry.controller {
+                            TabController::Bible(c) => {
+                                selected_page.set_title(&title);
+                                c.emit(BiblePageRootInput::HeaderStateChanged(
+                                    updated_state.clone(),
+                                ));
+                            }
+                            TabController::Search(c) => {
+                                c.emit(SearchPageInput::SetModule(sword_module));
+                            }
+                        }
                     }
                 }
                 self.current_reference = title;
@@ -376,13 +450,16 @@ impl Component for StudyPage {
                         let updated_state = entry.header_state.clone();
                         let title = Self::format_reference_title(&updated_state);
 
-                        selected_page.set_title(&title);
+                        if entry.kind == TabKind::Bible {
+                            selected_page.set_title(&title);
+                            if let TabController::Bible(ref controller) = entry.controller {
+                                controller.emit(BiblePageRootInput::HeaderStateChanged(
+                                    updated_state.clone(),
+                                ));
+                            }
+                        }
                         self.current_reference = title;
-                        self.active_header_state = Some(updated_state.clone());
-
-                        entry
-                            .controller
-                            .emit(BiblePageRootInput::HeaderStateChanged(updated_state));
+                        self.active_header_state = Some(updated_state);
                     }
                 }
                 self.refresh_all_grids(widgets, sender.clone());
@@ -396,13 +473,16 @@ impl Component for StudyPage {
                         let updated_state = entry.header_state.clone();
                         let title = Self::format_reference_title(&updated_state);
 
-                        selected_page.set_title(&title);
+                        if entry.kind == TabKind::Bible {
+                            selected_page.set_title(&title);
+                            if let TabController::Bible(ref controller) = entry.controller {
+                                controller.emit(BiblePageRootInput::HeaderStateChanged(
+                                    updated_state.clone(),
+                                ));
+                            }
+                        }
                         self.current_reference = title;
-                        self.active_header_state = Some(updated_state.clone());
-
-                        entry
-                            .controller
-                            .emit(BiblePageRootInput::HeaderStateChanged(updated_state));
+                        self.active_header_state = Some(updated_state);
                     }
                 }
                 self.refresh_all_grids(widgets, sender.clone());
@@ -413,9 +493,6 @@ impl Component for StudyPage {
             }
 
             StudyPageInput::UpdateTheme => {}
-            StudyPageInput::OpenSearch => {
-                
-            },
         }
 
         self.update_view(widgets, sender);
@@ -443,11 +520,7 @@ impl StudyPage {
             }
 
             if let Some(book) = &active_state.book {
-                Self::populate_chapter_grid(
-                    widgets,
-                    sender.clone(),
-                    book.chapters.len() as i32,
-                );
+                Self::populate_chapter_grid(widgets, sender.clone(), book.chapters.len() as i32);
             }
         }
     }
@@ -457,26 +530,60 @@ impl StudyPage {
         tab_view: &adw::TabView,
         sender: &ComponentSender<Self>,
         header_state: HeaderState,
+        kind: TabKind,
     ) {
-        let title = Self::format_reference_title(&header_state);
+        let (controller, widget_ref) = match kind {
+            TabKind::Bible => {
+                let controller = BiblePageRoot::builder()
+                    .launch(self.engine.clone())
+                    .forward(sender.input_sender(), |message| match message {
+                        BiblePageRootOutput::UpdateTheme => StudyPageInput::UpdateTheme,
+                        BiblePageRootOutput::ReferenceChanged(reference) => {
+                            StudyPageInput::ReferenceChanged(reference)
+                        }
+                        BiblePageRootOutput::HeaderStateChanged(state) => {
+                            StudyPageInput::TabHeaderStateChanged(state)
+                        }
+                    });
 
-        let controller = BiblePageRoot::builder()
-            .launch(self.engine.clone())
-            .forward(sender.input_sender(), |message| match message {
-                BiblePageRootOutput::UpdateTheme => StudyPageInput::UpdateTheme,
-                BiblePageRootOutput::ReferenceChanged(reference) => {
-                    StudyPageInput::ReferenceChanged(reference)
+                controller.emit(BiblePageRootInput::HeaderStateChanged(header_state.clone()));
+                let widget = controller.widget().clone();
+                (TabController::Bible(controller), widget)
+            }
+            TabKind::Search => {
+                let current_module = header_state.module.clone();
+                let controller = SearchPage::builder()
+                    .launch((self.engine.clone(), current_module))
+                    .detach();
+
+                let widget = controller.widget().clone();
+                (TabController::Search(controller), widget)
+            }
+        };
+
+        let page = tab_view.append(&widget_ref);
+
+        let title = match kind {
+            TabKind::Search => {
+                let search_count = self.search_tab_history.len() + 1;
+                page.set_icon(Some(
+                    &gtk::gio::Icon::for_string("edit-find-symbolic").unwrap(),
+                ));
+                if search_count == 1 {
+                    "Search".to_string()
+                } else {
+                    format!("Search {}", search_count)
                 }
-                BiblePageRootOutput::HeaderStateChanged(state) => {
-                    StudyPageInput::TabHeaderStateChanged(state)
-                }
-            });
+            }
+            TabKind::Bible => Self::format_reference_title(&header_state),
+        };
 
-        controller.emit(BiblePageRootInput::HeaderStateChanged(header_state.clone()));
-
-        let page = tab_view.append(controller.widget());
         page.set_title(&title);
         tab_view.set_selected_page(&page);
+
+        if kind == TabKind::Search {
+            self.search_tab_history.push(page.clone());
+        }
 
         self.current_reference = title;
         self.active_header_state = Some(header_state.clone());
@@ -484,6 +591,7 @@ impl StudyPage {
             controller,
             page,
             header_state,
+            kind,
         });
     }
 }

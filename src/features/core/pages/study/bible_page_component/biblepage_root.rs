@@ -1,7 +1,11 @@
 use adw::prelude::*;
 use std::sync::{Arc, RwLock};
 use xbible_engine::engines::{
-    module_engine::{module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery, sword_module::{module::SwordModule, module_book::ModuleBook}}, xbible_engine::engine::XBibleEngine,
+    module_engine::{
+        module_engine_extensions::module_engine_dictionary_ext::DictionaryQuery,
+        sword_module::{module::SwordModule, module_book::ModuleBook},
+    },
+    xbible_engine::engine::XBibleEngine,
 };
 
 use relm4::{Component, ComponentParts, ComponentSender, Controller, prelude::*};
@@ -51,54 +55,57 @@ impl Component for BiblePageRoot {
 
     view! {
         #[root]
-        #[name="study_tools_widgets"]
-        gtk::Paned{
-            set_orientation: gtk::Orientation::Horizontal,
-            set_wide_handle: true,
-            set_shrink_start_child: true,
-            #[watch]
-            set_css_classes: &[format!("preview-area-{}", (model.config.read().unwrap().theme())).as_str(),],
 
-            set_start_child=Some(model.bible_page.widget()),
+        gtk::Box{
+           #[name="study_tools_widgets"]
+            gtk::Paned{
+                set_orientation: gtk::Orientation::Horizontal,
+                set_wide_handle: true,
+                set_shrink_start_child: true,
+                #[watch]
+                set_css_classes: &[format!("preview-area-{}", (model.config.read().unwrap().theme())).as_str(),],
 
-            #[wrap(Some)]
-            set_end_child = &adw::ToolbarView {
-
-                set_margin_horizontal: 20,
-                add_top_bar: switcher_bar = &adw::InlineViewSwitcher {
-                    #[watch]
-                    set_stack: Some(&stack),
-                    add_css_class: "round",
-
-                },
-
+                set_start_child=Some(model.bible_page.widget()),
 
                 #[wrap(Some)]
-                set_content: stack = &adw::ViewStack {
-                    set_vexpand: true,
+                set_end_child = &adw::ToolbarView {
 
-                    add_titled: (
-                        model.dictionary_page.widget(),
-                        Some("dict"),
-                        "Dictionary"
-                    ),
+                    set_margin_horizontal: 20,
+                    add_top_bar: switcher_bar = &adw::InlineViewSwitcher {
+                        #[watch]
+                        set_stack: Some(&stack),
+                        add_css_class: "round",
 
-                    // Page 2: References
-                    add_titled: (
-                        &gtk::Label::new(Some("Lexicons")),
-                        Some("Lex"),
-                        "Lexicons"
-                    ),
+                    },
 
-                    add_titled: (
-                        &gtk::Label::new(Some("Commentary")),
-                        Some("Comm"),
-                        "Commentaries"
-                    ),
 
+                    #[wrap(Some)]
+                    set_content: stack = &adw::ViewStack {
+                        set_vexpand: true,
+
+                        add_titled: (
+                            model.dictionary_page.widget(),
+                            Some("dict"),
+                            "Dictionary"
+                        ),
+
+                        // Page 2: References
+                        add_titled: (
+                            &gtk::Label::new(Some("Lexicons")),
+                            Some("Lex"),
+                            "Lexicons"
+                        ),
+
+                        add_titled: (
+                            &gtk::Label::new(Some("Commentary")),
+                            Some("Comm"),
+                            "Commentaries"
+                        ),
+
+                    }
                 }
-            }
 
+            }
         }
     }
 
@@ -167,8 +174,9 @@ impl Component for BiblePageRoot {
                 self.bible_page.emit(StudyInput::LoadReference(refrence));
             }
             BiblePageRootInput::HeaderStateChanged(header_state) => {
-                 self.bible_page.emit(StudyInput::HeaderStateChanged(header_state.clone()));
-            },
+                self.bible_page
+                    .emit(StudyInput::HeaderStateChanged(header_state.clone()));
+            }
         }
     }
 }

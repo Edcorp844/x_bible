@@ -26,6 +26,7 @@ pub struct StudyPage {
 
 #[derive(Debug)]
 pub enum StudyPageInput {
+    OpenSearch,
     UpdateTheme,
     NewTab,
     TabSelected(adw::TabPage),
@@ -250,6 +251,13 @@ impl Component for StudyPage {
                             set_valign: gtk::Align::Center,
                             set_tooltip_text: Some("New Tab"),
                             connect_clicked => StudyPageInput::NewTab,
+                        },
+
+                         pack_end = &gtk::Button {
+                            set_icon_name: "edit-find-symbolic",
+                            set_valign: gtk::Align::Center,
+                            set_tooltip_text: Some("Open Search Tab"),
+                            connect_clicked => StudyPageInput::OpenSearch,
                         }
                     },
                     add_top_bar = &adw::TabBar {
@@ -405,6 +413,9 @@ impl Component for StudyPage {
             }
 
             StudyPageInput::UpdateTheme => {}
+            StudyPageInput::OpenSearch => {
+                
+            },
         }
 
         self.update_view(widgets, sender);
@@ -474,13 +485,6 @@ impl StudyPage {
             page,
             header_state,
         });
-    }
-
-    pub fn open_references(&self) -> Vec<String> {
-        self.tabs
-            .iter()
-            .map(|t| t.page.title().to_string())
-            .collect()
     }
 }
 

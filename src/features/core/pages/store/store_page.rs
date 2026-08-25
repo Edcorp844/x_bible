@@ -471,7 +471,9 @@ impl Component for StorePage {
 
                                     // Offload heavy SWORD manager directory re-scan to a background thread
                                     std::thread::spawn(move || {
+                                        debug!("calling refresh_installed_modules");
                                         engine_bg.refresh_installed_modules();
+                                        debug!("done");
 
                                         sender_bg
                                             .send(StorePageInput::UpdateInstallationStatus {

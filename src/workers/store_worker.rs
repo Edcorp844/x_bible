@@ -179,9 +179,10 @@ impl relm4::Worker for StoreWorker {
                 self.set_active_install(Some(initial), &sender);
 
                 let store = Arc::clone(&self.store);
-                relm4::spawn_local(async move {
+                let tx = sender.input_sender().clone();
+                std::thread::spawn(move || {
                     let result = store.install(item).map_err(|e| e.to_string());
-                    sender.input(StoreWorkerInput::InstallTaskStarted {
+                    let _ = tx.send(StoreWorkerInput::InstallTaskStarted {
                         item_id,
                         kind,
                         result,

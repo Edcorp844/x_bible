@@ -107,17 +107,9 @@ impl Component for CatalogGridScreen {
                         set_icon_name: "view-sort-ascending-symbolic",
                         set_tooltip_text: Some(&gettext("Sort By")),
                     },
-                },
-
-                add_top_bar = &gtk::Box {
-                    set_orientation: gtk::Orientation::Vertical,
-                    set_margin_start: 16,
-                    set_margin_end: 16,
-                    set_margin_top: 8,
-                    set_margin_bottom: 8,
 
                     #[name = "search_entry"]
-                    gtk::SearchEntry {
+                    pack_end = &gtk::SearchEntry {
                         set_placeholder_text: Some(&gettext("Search {}").replace("{}", &model.title)),
                         set_hexpand: true,
                         connect_search_changed[sender] => move |entry| {

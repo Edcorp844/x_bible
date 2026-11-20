@@ -1,27 +1,31 @@
 use std::collections::HashMap;
 
 use adw::prelude::*;
-use relm4::{Component, Controller, WorkerController};
+use relm4::{Component, Controller};
 
 use crate::{
     core::engine::SharedEngine,
-    features::{store::store_view::StoreView, study::study_view::StudyView},
+    features::{
+        store::store_view::StoreView,
+        study::study_view::{StudyView, StudyViewOutput},
+    },
     navigation::{page_controller::PageController, xbible_navigationpage::XBibleNavigationPage},
     workers::store_worker::StoreWorker,
 };
 
 #[derive(Debug)]
 pub struct XBibleApp {
+    sidebar_collapsed: bool,
     engine: SharedEngine,
     pages_cache: HashMap<String, PageController>,
     current_page_key: String,
-    store_worker: Controller<StoreWorker>,
 }
 
 #[derive(Debug)]
 pub enum XBibleAppInput {
-    SetSidebarCollapsed(bool),
     SelectPage(XBibleNavigationPage),
+    ShowError(String),
+    ToggleSidebar,
 }
 
 #[derive(Debug)]
@@ -41,9 +45,9 @@ impl Component for XBibleApp {
             #[wrap(Some)]
             set_content = &adw::OverlaySplitView {
                 set_sidebar_position: gtk::PackType::Start,
-                connect_collapsed_notify => move |view| {
-                    XBibleAppInput::SetSidebarCollapsed(view.is_collapsed());
-                },
+                #[watch]
+                set_collapsed: model.sidebar_collapsed,
+
 
                 #[wrap(Some)]
                 set_sidebar = &adw::ToolbarView {
@@ -90,20 +94,24 @@ impl Component for XBibleApp {
         root: Self::Root,
         sender: relm4::prelude::ComponentSender<Self>,
     ) -> relm4::prelude::ComponentParts<Self> {
-        let initial_page = StudyView::builder().launch(()).detach();
+        let initial_page =
+            StudyView::builder()
+                .launch(())
+                .forward(sender.input_sender(), move |message| match message {
+                    StudyViewOutput::ShowError(error) => XBibleAppInput::ShowError(error),
+                    StudyViewOutput::ToggleSidebar => XBibleAppInput::ToggleSidebar,
+                });
         let mut pages_cache = HashMap::new();
         pages_cache.insert(
             XBibleNavigationPage::Study.to_key(),
             PageController::Study(initial_page),
         );
 
-        let store_worker = StoreWorker::builder().launch(engine.clone()).detach();
-
         let model = Self {
+            sidebar_collapsed: false,
             engine,
             pages_cache,
             current_page_key: XBibleNavigationPage::Study.to_key(),
-            store_worker,
         };
 
         let widgets = view_output!();
@@ -118,16 +126,21 @@ impl Component for XBibleApp {
         root: &Self::Root,
     ) {
         match message {
-            XBibleAppInput::SetSidebarCollapsed(value) => {
-                info!("Sidebar close request {value}");
-            }
             XBibleAppInput::SelectPage(page) => {
                 let key = page.to_key();
 
                 if !self.pages_cache.contains_key(&key) {
                     let navigation_page = match page {
                         XBibleNavigationPage::Study => {
-                            PageController::Study(StudyView::builder().launch(()).detach())
+                            PageController::Study(StudyView::builder().launch(()).forward(
+                                sender.input_sender(),
+                                move |message| match message {
+                                    StudyViewOutput::ShowError(error) => {
+                                        XBibleAppInput::ShowError(error)
+                                    }
+                                    StudyViewOutput::ToggleSidebar => XBibleAppInput::ToggleSidebar,
+                                },
+                            ))
                         }
                         XBibleNavigationPage::Store => PageController::Store(
                             StoreView::builder().launch(self.engine.clone()).detach(),
@@ -144,6 +157,10 @@ impl Component for XBibleApp {
                     .map(|p| p.widget().upcast_ref::<gtk::Widget>());
                 widgets.main_content.set_child(child);
             }
+            XBibleAppInput::ShowError(error) => {
+                error!("{error}");
+            }
+            XBibleAppInput::ToggleSidebar => self.sidebar_collapsed = !self.sidebar_collapsed,
         }
     }
 }

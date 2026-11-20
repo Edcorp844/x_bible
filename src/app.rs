@@ -1,314 +1,148 @@
-use ::xbible_engine::engines::{
-    audio_engine::engine::AudioEngine, xbible_engine::engine::XBibleEngine,
-};
+use std::collections::HashMap;
 
 use adw::prelude::*;
-use relm4::prelude::*;
-use std::fmt::Debug;
-use std::{collections::HashMap, sync::Arc};
+use relm4::{Component, Controller, WorkerController};
 
-use crate::features::core::pages::audio_bible::audio_bible_page::AudioBibleOutput;
-use crate::features::core::pages::audio_bible::persistent_control::AudioPersistentControl;
-use crate::features::core::pages::store::store_page::{StorePage, StorePageOutput};
-use crate::features::core::pages::timeline::timeline_page::{TimelinePage, TimelinePageOutput};
-use crate::features::core::{
-    components::sidebar::{NavigationPage, SideBar, SidebarMessage},
-    pages::{
-        audio_bible::audio_bible_page::AudioBiblePage,
-        library::library_page::{LibraryPage, LibraryPageCategory, LibraryPageOutput},
-        study::study_page::{StudyPage, StudyPageOutput},
-    },
+use crate::{
+    core::engine::SharedEngine,
+    features::{store::store_view::StoreView, study::study_view::StudyView},
+    navigation::{page_controller::PageController, xbible_navigationpage::XBibleNavigationPage},
+    workers::store_worker::StoreWorker,
 };
 
-enum PageController {
-    Bible(Controller<StudyPage>),
-    AudioBible(Controller<AudioBiblePage>),
-    Store(Controller<StorePage>),
-    Library(Controller<LibraryPage>),
-    TimeLine(Controller<TimelinePage>),
-}
-
-impl PageController {
-    fn widget(&self) -> &adw::NavigationPage {
-        match self {
-            Self::Bible(c) => c.widget(),
-            Self::AudioBible(c) => c.widget(),
-            Self::Store(c) => c.widget(),
-            Self::Library(c) => c.widget(),
-            Self::TimeLine(c) => c.widget(),
-        }
-    }
-}
-
-pub struct AppModel {
-    side_bar: Controller<SideBar>,
+#[derive(Debug)]
+pub struct XBibleApp {
+    engine: SharedEngine,
     pages_cache: HashMap<String, PageController>,
-
-    engine: Option<Arc<XBibleEngine>>,
-    audio_engine: Arc<AudioEngine>,
-    is_engine_ready: bool,
-    engine_error: Option<String>,
-
-    is_sidebar_visible: bool,
     current_page_key: String,
-
-    persistent_player: Controller<AudioPersistentControl>,
+    store_worker: Controller<StoreWorker>,
 }
 
 #[derive(Debug)]
-pub enum AppInputMessage {
-    ToggleSidebar,
-    SetContentPage(NavigationPage),
-    SetSidebarVisibility(bool),
-
-    EngineInitializationSuccess(Arc<XBibleEngine>),
-    EngineInitializationFailed(String),
+pub enum XBibleAppInput {
+    SetSidebarCollapsed(bool),
+    SelectPage(XBibleNavigationPage),
 }
 
+#[derive(Debug)]
+pub enum XBibleAppOutput {}
+
 #[relm4::component(pub)]
-impl SimpleComponent for AppModel {
-    type Init = ();
-    type Input = AppInputMessage;
-    type Output = ();
+impl Component for XBibleApp {
+    type Init = SharedEngine;
+    type Input = XBibleAppInput;
+    type Output = XBibleAppOutput;
+    type CommandOutput = ();
 
     view! {
-        adw::ApplicationWindow {
-            set_default_width: 1000,
-            set_default_height: 800,
-
-            #[name = "split_view"]
-            adw::OverlaySplitView {
-                set_collapsed: true,
-                set_sidebar_width_fraction: 0.2,
-                set_max_sidebar_width: 150.0,
-
-                #[watch]
-                set_show_sidebar: model.is_sidebar_visible,
-
-                connect_show_sidebar_notify[sender] => move |view| {
-                    sender.input(AppInputMessage::SetSidebarVisibility(view.shows_sidebar()));
+        adw::Window {
+            set_title: Some("XBible"),
+            set_default_size: (1080, 800),
+            #[wrap(Some)]
+            set_content = &adw::OverlaySplitView {
+                set_sidebar_position: gtk::PackType::Start,
+                connect_collapsed_notify => move |view| {
+                    XBibleAppInput::SetSidebarCollapsed(view.is_collapsed());
                 },
 
                 #[wrap(Some)]
-                set_sidebar = &gtk::Box {
-                    #[local_ref]
-                    sidebar_widget -> adw::NavigationPage {
-                        set_title: "XBible",
-                    },
-                },
+                set_sidebar = &adw::ToolbarView {
+                    add_top_bar = &adw::HeaderBar {},
 
-                #[wrap(Some)]
-                set_content = &adw::Bin {
-                   #[name = "content_stack"]
-                    gtk::Stack {
-                        set_transition_type: gtk::StackTransitionType::Crossfade,
-
-                        // Persistent Sub-View 1: Loading view state wrapper
-                        add_named[Some("loading")] = &gtk::CenterBox {
-                            set_center_widget: Some(&gtk::Spinner::builder().spinning(true)
-                                .css_classes(vec![String::from("loading-spinner")])
-                                .build()),
-                        },
-
-                        // Persistent Sub-View 2: Error view state container
-                        add_named[Some("error")] = &gtk::CenterBox {
-                            #[watch]
-                            set_center_widget: model.engine_error.as_ref().map(|msg| {
-                                gtk::Label::builder()
-                                    .label(msg)
-                                    .css_classes(vec![String::from("error-state-label")])
-                                    .build()
-                                    .upcast::<gtk::Widget>()
-                            }).as_ref(),
-                        },
-
-                        // Persistent Sub-View 3: Workspace layout
-                       add_named[Some("workspace")] = &adw::Bin {
-                            gtk::Overlay {
-                                #[watch]
-                                set_child: model.pages_cache.get(&model.current_page_key).map(|c| c.widget()),
-                                // add_overlay = model.persistent_player.widget() {
-                                //     set_valign: gtk::Align::End,
-                                //     set_halign: gtk::Align::Center,
-                                // }
+                    #[wrap(Some)]
+                    set_content = &adw::Sidebar {
+                        append = adw::SidebarSection {
+                            append = adw::SidebarItem {
+                                set_icon_name: Some(&XBibleNavigationPage::Study.icon_name()),
+                                set_title: Some(&XBibleNavigationPage::Study.title()),
+                            },
+                            append = adw::SidebarItem {
+                                set_icon_name: Some(&XBibleNavigationPage::Store.icon_name()),
+                                set_title: Some(&XBibleNavigationPage::Store.title()),
                             }
                         },
 
-                        // Track state modifications to flip active layout index targets smoothly
-                        #[watch]
-                        set_visible_child_name: if model.engine_error.is_some() {
-                            "error"
-                        } else if !model.is_engine_ready {
-                            "loading"
-                        } else {
-                            "workspace"
-                        },
+                        connect_activated[sender] => move |bar, _index| {
+                            if let Some(title) = bar.selected_item().and_then(|i| i.title()) {
+                                sender.input(XBibleAppInput::SelectPage(
+                                    XBibleNavigationPage::from_name(title.as_str()),
+                                ));
+                            }
+                        }
                     }
                 },
+
+                #[wrap(Some)]
+                #[name = "toast_overlay"]
+                set_content = &adw::ToastOverlay {
+                    #[name="main_content"]
+                    adw::NavigationPage {
+                        set_title: "XBible",
+                        set_child = model.pages_cache.get(&model.current_page_key).map(PageController::widget),
+                    }
+                }
             }
         }
     }
 
     fn init(
-        _init: Self::Init,
-        _root: Self::Root,
-        sender: ComponentSender<Self>,
-    ) -> ComponentParts<Self> {
-        let engine_sender = sender.clone();
-        std::thread::spawn(
-            move || match std::panic::catch_unwind(|| XBibleEngine::new()) {
-                Ok(loaded_engine) => {
-                    engine_sender
-                        .input(AppInputMessage::EngineInitializationSuccess(loaded_engine));
-                }
-                Err(_) => {
-                    engine_sender.input(AppInputMessage::EngineInitializationFailed(String::from(
-                        "Failed to initialize SWORD background subsystems.",
-                    )));
-                }
-            },
+        engine: Self::Init,
+        root: Self::Root,
+        sender: relm4::prelude::ComponentSender<Self>,
+    ) -> relm4::prelude::ComponentParts<Self> {
+        let initial_page = StudyView::builder().launch(()).detach();
+        let mut pages_cache = HashMap::new();
+        pages_cache.insert(
+            XBibleNavigationPage::Study.to_key(),
+            PageController::Study(initial_page),
         );
 
-        let side_bar = SideBar::builder()
-            .launch(())
-            .forward(sender.input_sender(), |message| match message {
-                SidebarMessage::ToggleSidebar => AppInputMessage::ToggleSidebar,
-                SidebarMessage::SelectPage(page) => AppInputMessage::SetContentPage(page),
-            });
+        let store_worker = StoreWorker::builder().launch(engine.clone()).detach();
 
-        let audio_engine = Arc::new(AudioEngine::new());
-
-        let persistent_player = AudioPersistentControl::builder()
-            .launch(audio_engine.clone()) // Pass engine reference down
-            .detach();
-
-        let model = AppModel {
-            side_bar,
-            pages_cache: HashMap::new(),
-            engine: None,
-            audio_engine,
-            is_engine_ready: false,
-            engine_error: None,
-            is_sidebar_visible: false,
-            current_page_key: NavigationPage::Bible.to_key(),
-            persistent_player,
+        let model = Self {
+            engine,
+            pages_cache,
+            current_page_key: XBibleNavigationPage::Study.to_key(),
+            store_worker,
         };
 
-        let sidebar_widget = model.side_bar.widget();
         let widgets = view_output!();
-
-        ComponentParts { model, widgets }
+        relm4::ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
+    fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        message: Self::Input,
+        sender: relm4::prelude::ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
         match message {
-            AppInputMessage::ToggleSidebar => {
-                self.is_sidebar_visible = !self.is_sidebar_visible;
+            XBibleAppInput::SetSidebarCollapsed(value) => {
+                info!("Sidebar close request {value}");
             }
-            AppInputMessage::SetSidebarVisibility(visible) => {
-                if self.is_sidebar_visible != visible {
-                    self.is_sidebar_visible = visible;
-                }
-            }
-
-            AppInputMessage::EngineInitializationSuccess(engine_arc) => {
-                self.engine = Some(engine_arc.clone());
-                self.is_engine_ready = true;
-
-                let bible_page = PageController::Bible(
-                    StudyPage::builder()
-                        .launch((engine_arc.clone(), self.is_sidebar_visible))
-                        .forward(sender.input_sender(), |message| match message {
-                            StudyPageOutput::ToggleSidebar => AppInputMessage::ToggleSidebar,
-                        }),
-                );
-                self.pages_cache
-                    .insert(NavigationPage::Bible.to_key(), bible_page);
-            }
-
-            AppInputMessage::EngineInitializationFailed(err_string) => {
-                self.engine_error = Some(err_string);
-                self.is_engine_ready = false;
-            }
-
-            AppInputMessage::SetContentPage(page) => {
+            XBibleAppInput::SelectPage(page) => {
                 let key = page.to_key();
 
-                let Some(ref active_engine) = self.engine else {
-                    return;
-                };
-
                 if !self.pages_cache.contains_key(&key) {
-                    match page {
-                        NavigationPage::Bible => {
-                            let bible_page = PageController::Bible(
-                                StudyPage::builder()
-                                    .launch((active_engine.clone(), self.is_sidebar_visible))
-                                    .forward(sender.input_sender(), |message| match message {
-                                        StudyPageOutput::ToggleSidebar => {
-                                            AppInputMessage::ToggleSidebar
-                                        }
-                                    }),
-                            );
-                            self.pages_cache.insert(key.clone(), bible_page);
+                    let navigation_page = match page {
+                        XBibleNavigationPage::Study => {
+                            PageController::Study(StudyView::builder().launch(()).detach())
                         }
-                        NavigationPage::Store => {
-                            let store_page = PageController::Store(
-                                StorePage::builder().launch(active_engine.clone()).forward(
-                                    sender.input_sender(),
-                                    |msg| match msg {
-                                        StorePageOutput::ToggleSidebar => {
-                                            AppInputMessage::ToggleSidebar
-                                        }
-                                        StorePageOutput::ModuleSelected(_) =>  AppInputMessage::ToggleSidebar,
-                                    },
-                                ),
-                            );
-                            self.pages_cache.insert(key.clone(), store_page);
-                        }
-                        NavigationPage::Timeline => {
-                            let timeline_page = PageController::TimeLine(
-                                TimelinePage::builder()
-                                    .launch(active_engine.clone())
-                                    .forward(sender.input_sender(), |msg| match msg {
-                                        TimelinePageOutput::ToggleSidebar => {
-                                            AppInputMessage::ToggleSidebar
-                                        }
-                                    }),
-                            );
-                            self.pages_cache.insert(key.clone(), timeline_page);
-                        }
-                        NavigationPage::AudioBible => {
-                            let audio_page = PageController::AudioBible(
-                                AudioBiblePage::builder()
-                                    .launch((self.audio_engine.clone(), self.is_sidebar_visible))
-                                    .forward(sender.input_sender(), |message| match message {
-                                        AudioBibleOutput::ToggleSidebar => {
-                                            AppInputMessage::ToggleSidebar
-                                        }
-                                    }),
-                            );
-                            self.pages_cache.insert(key.clone(), audio_page);
-                        }
-                        NavigationPage::Library(category) => {
-                            let library_page = LibraryPage::builder()
-                                .launch((
-                                    LibraryPageCategory::from_label(category.as_str()),
-                                    active_engine.clone(),
-                                    self.is_sidebar_visible,
-                                ))
-                                .forward(sender.input_sender(), |message| match message {
-                                    LibraryPageOutput::ToggleSidebar => {
-                                        AppInputMessage::ToggleSidebar
-                                    }
-                                });
-                            self.pages_cache
-                                .insert(key.clone(), PageController::Library(library_page));
-                        }
-                    }
-                }
+                        XBibleNavigationPage::Store => PageController::Store(
+                            StoreView::builder().launch(self.engine.clone()).detach(),
+                        ),
+                    };
 
+                    self.pages_cache.insert(key.clone(), navigation_page);
+                }
                 self.current_page_key = key;
+
+                let child = self
+                    .pages_cache
+                    .get(&self.current_page_key)
+                    .map(|p| p.widget().upcast_ref::<gtk::Widget>());
+                widgets.main_content.set_child(child);
             }
         }
     }

@@ -1,3 +1,2 @@
-pub mod bible;
-pub mod core;
-pub mod dictionary;
+pub(crate) mod store;
+pub(crate) mod study;

@@ -67,17 +67,9 @@ impl Component for LanguageListView {
                         set_icon_name: "view-sort-ascending-symbolic",
                         set_tooltip_text: Some(&gettext("Sort By")),
                     },
-                },
-
-                add_top_bar = &gtk::Box {
-                    set_orientation: gtk::Orientation::Vertical,
-                    set_margin_start: 12,
-                    set_margin_end: 12,
-                    set_margin_top: 8,
-                    set_margin_bottom: 8,
 
                     #[name = "search_entry"]
-                    gtk::SearchEntry {
+                    pack_end = &gtk::SearchEntry {
                         set_placeholder_text: Some(&gettext("Search languages")),
                         set_hexpand: true,
                         connect_search_changed[sender] => move |entry| {
@@ -86,20 +78,27 @@ impl Component for LanguageListView {
                     },
                 },
 
-                #[wrap(Some)]
-                set_content = &gtk::ScrolledWindow {
-                    set_hscrollbar_policy: gtk::PolicyType::Never,
-                    set_vexpand: true,
 
-                    #[name = "groups_box"]
-                    gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_spacing: 18,
-                        set_margin_start: 12,
-                        set_margin_end: 12,
-                        set_margin_top: 8,
-                        set_margin_bottom: 24,
-                    },
+                #[wrap(Some)]
+                    set_content = &adw::Clamp {
+                    set_maximum_size: 1500,
+                    set_tightening_threshold: 1000,
+
+                    #[wrap(Some)]
+                    set_child = &gtk::ScrolledWindow {
+                        set_hscrollbar_policy: gtk::PolicyType::Never,
+                        set_vexpand: true,
+
+                        #[name = "groups_box"]
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 18,
+                            set_margin_start: 12,
+                            set_margin_end: 12,
+                            set_margin_top: 8,
+                            set_margin_bottom: 24,
+                        },
+                    }
                 },
             },
         }

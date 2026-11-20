@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use adw::prelude::*;
 use gettextrs::gettext;
@@ -15,6 +15,9 @@ use crate::{
     },
     workers::store_worker::InstallState,
 };
+
+const CARD_BASE_WIDTH: i32 = 156;
+const MAX_GRID_COLUMNS: u32 = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogSortOrder {
@@ -50,7 +53,7 @@ pub struct CatalogGridScreen {
     search_query: String,
     sort_order: CatalogSortOrder,
     filter_language: Option<String>,
-    cards: HashMap<String, Controller<TranslationCard>>,
+    cards: Vec<(String, Controller<TranslationCard>)>,
 }
 
 #[derive(Debug)]
@@ -85,10 +88,9 @@ impl Component for CatalogGridScreen {
 
             #[wrap(Some)]
             set_child = &adw::ToolbarView {
-
                 add_top_bar = &adw::HeaderBar {
                     #[wrap(Some)]
-                    #[name="window_title"]
+                    #[name = "window_title"]
                     set_title_widget = &adw::WindowTitle {
                         set_title: &model.title,
                         set_subtitle: &model.subtitle_text(),
@@ -109,8 +111,8 @@ impl Component for CatalogGridScreen {
 
                 add_top_bar = &gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
-                    set_margin_start: 12,
-                    set_margin_end: 12,
+                    set_margin_start: 16,
+                    set_margin_end: 16,
                     set_margin_top: 8,
                     set_margin_bottom: 8,
 
@@ -128,17 +130,32 @@ impl Component for CatalogGridScreen {
                 set_content = &gtk::ScrolledWindow {
                     set_hscrollbar_policy: gtk::PolicyType::Never,
                     set_vexpand: true,
+                    set_hexpand: true,
 
-                    #[name = "flow_box"]
-                    gtk::FlowBox {
-                        set_selection_mode: gtk::SelectionMode::None,
-                        set_homogeneous: true,
-                        set_min_children_per_line: 1,
-                        set_max_children_per_line: 8,
-                        set_column_spacing: 16,
-                        set_row_spacing: 20,
-                        set_margin_all: 16,
+                    #[name = "grid_host"]
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_hexpand: true,
+                        set_vexpand: true,
+                        set_halign: gtk::Align::Fill,
                         set_valign: gtk::Align::Start,
+
+                        #[name = "flow_box"]
+                        gtk::FlowBox {
+                            set_selection_mode: gtk::SelectionMode::None,
+                            set_homogeneous: true,
+                            set_hexpand: true,
+                            set_halign: gtk::Align::Fill,
+                            set_valign: gtk::Align::Start,
+                            set_min_children_per_line: 1,
+                            set_max_children_per_line: MAX_GRID_COLUMNS,
+                            set_column_spacing: 20,
+                            set_row_spacing: 24,
+                            set_margin_start: 20,
+                            set_margin_end: 20,
+                            set_margin_top: 16,
+                            set_margin_bottom: 24,
+                        },
                     },
                 },
             },
@@ -159,7 +176,7 @@ impl Component for CatalogGridScreen {
             search_query: String::new(),
             sort_order: CatalogSortOrder::Name,
             filter_language: None,
-            cards: HashMap::new(),
+            cards: Vec::new(),
         };
 
         let widgets = view_output!();
@@ -180,7 +197,7 @@ impl Component for CatalogGridScreen {
         widgets: &mut Self::Widgets,
         message: Self::Input,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match message {
             CatalogGridInput::SyncState {
@@ -189,7 +206,7 @@ impl Component for CatalogGridScreen {
             } => {
                 self.shelves = shelves;
                 self.active_install = active_install;
-                widgets.window_title.set_subtitle(&self.subtitle_text());
+                self.update_header_subtitle(&widgets.window_title);
                 self.sync_or_rebuild(&widgets.flow_box, &sender);
             }
             CatalogGridInput::SearchChanged(query) => {
@@ -343,14 +360,12 @@ impl CatalogGridScreen {
 
     fn sync_or_rebuild(&mut self, flow_box: &gtk::FlowBox, sender: &ComponentSender<Self>) {
         let items = self.filtered_items();
-        let same_order: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
-        let existing_order: Vec<&str> = self.cards.keys().map(String::as_str).collect();
+        let desired_ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        let existing_ids: Vec<&str> = self.cards.iter().map(|(id, _)| id.as_str()).collect();
 
-        if same_order.len() == existing_order.len()
-            && items.iter().all(|i| self.cards.contains_key(&i.id))
-        {
+        if desired_ids == existing_ids {
             for item in items {
-                if let Some(card) = self.cards.get(&item.id) {
+                if let Some((_, card)) = self.cards.iter().find(|(id, _)| id == &item.id) {
                     card.emit(TranslationCardInput::SetStatus(self.card_status(&item)));
                 }
             }
@@ -363,9 +378,16 @@ impl CatalogGridScreen {
         while let Some(child) = flow_box.first_child() {
             flow_box.remove(&child);
         }
-        self.cards.clear();
 
         let items = self.filtered_items();
+        let mut next_cards: Vec<(String, Controller<TranslationCard>)> =
+            Vec::with_capacity(items.len());
+
+        // Give fewer items extra breathing room so sparse rows look intentional and balanced
+        let (col_spacing, row_spacing) = if items.len() <= 3 { (28, 28) } else { (20, 24) };
+        flow_box.set_column_spacing(col_spacing);
+        flow_box.set_row_spacing(row_spacing);
+
         for item in items {
             let status = self.card_status(&item);
             let card = TranslationCard::builder()
@@ -373,13 +395,20 @@ impl CatalogGridScreen {
                     item: item.clone(),
                     status,
                     can_delete: false,
-                    width: 150,
+                    width: CARD_BASE_WIDTH,
                 })
                 .forward(sender.input_sender(), CatalogGridInput::CardEvent);
 
-            flow_box.insert(card.widget(), -1);
-            self.cards.insert(item.id.clone(), card);
+            let card_widget = card.widget();
+            card_widget.set_halign(gtk::Align::Fill);
+            card_widget.set_hexpand(true);
+
+            flow_box.insert(card_widget, -1);
+            next_cards.push((item.id.clone(), card));
         }
+
+        // Drop old controllers only after new widgets are inserted
+        self.cards = next_cards;
     }
 }
 

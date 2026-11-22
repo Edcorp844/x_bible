@@ -1,6 +1,5 @@
-use adw::{WrapBox, prelude::*};
+use adw::prelude::*;
 use gettextrs::gettext;
-use gtk::prelude::*;
 use relm4::{ComponentController, Controller, WorkerController, prelude::*};
 use xbible_engine::features::store::{LanguageFacet, StoreItem, StoreShelf};
 

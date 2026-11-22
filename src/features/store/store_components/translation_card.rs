@@ -3,7 +3,6 @@ use std::hash::{Hash, Hasher};
 
 use adw::prelude::*;
 use gettextrs::gettext;
-use gtk::prelude::*;
 use relm4::prelude::*;
 use xbible_engine::features::store::StoreItem;
 
@@ -22,17 +21,6 @@ pub struct TranslationCardInit {
     pub status: TranslationCardStatus,
     pub can_delete: bool,
     pub width: i32,
-}
-
-impl Default for TranslationCardInit {
-    fn default() -> Self {
-        Self {
-            item: unreachable!("pass TranslationCardInit with StoreItem"),
-            status: TranslationCardStatus::Idle,
-            can_delete: false,
-            width: 150,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -165,7 +153,7 @@ impl Component for TranslationCard {
                         set_halign: gtk::Align::Center,
                         set_valign: gtk::Align::End,
                         set_margin_top: 12,
-                        inline_css: "color: rgba(255, 255, 255, 0.7); font-weight: 700; font-size: 0.75rem; letter-spacing: 1.2px;",
+                        inline_css: "color: rgba(255, 255, 255, 0.7); font-weight: 700; font-size: 0.65rem; letter-spacing: 1.2px;",
                     },
                 },
             },
@@ -238,7 +226,7 @@ impl Component for TranslationCard {
         widgets: &mut Self::Widgets,
         message: Self::Input,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match message {
             TranslationCardInput::SetStatus(status) => {

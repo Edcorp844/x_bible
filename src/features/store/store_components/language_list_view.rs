@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use adw::prelude::*;
 use gettextrs::gettext;
-use gtk::prelude::*;
 use relm4::prelude::*;
 use xbible_engine::features::store::LanguageFacet;
 
@@ -127,7 +126,7 @@ impl Component for LanguageListView {
         widgets: &mut Self::Widgets,
         message: Self::Input,
         sender: ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match message {
             LanguageListInput::SetLanguages(languages) => {

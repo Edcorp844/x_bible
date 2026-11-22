@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use adw::prelude::*;
-use relm4::{Component, Controller};
+use relm4::Component;
 
 use crate::{
     core::engine::SharedEngine,
@@ -10,7 +10,6 @@ use crate::{
         study::study_view::{StudyView, StudyViewOutput},
     },
     navigation::{page_controller::PageController, xbible_navigationpage::XBibleNavigationPage},
-    workers::store_worker::StoreWorker,
 };
 
 #[derive(Debug)]
@@ -26,6 +25,7 @@ pub enum XBibleAppInput {
     SelectPage(XBibleNavigationPage),
     ShowError(String),
     ToggleSidebar,
+    OpenStore,
 }
 
 #[derive(Debug)]
@@ -94,13 +94,15 @@ impl Component for XBibleApp {
         root: Self::Root,
         sender: relm4::prelude::ComponentSender<Self>,
     ) -> relm4::prelude::ComponentParts<Self> {
-        let initial_page =
-            StudyView::builder()
-                .launch(())
-                .forward(sender.input_sender(), move |message| match message {
-                    StudyViewOutput::ShowError(error) => XBibleAppInput::ShowError(error),
-                    StudyViewOutput::ToggleSidebar => XBibleAppInput::ToggleSidebar,
-                });
+        let initial_page = StudyView::builder().launch(engine.clone()).forward(
+            sender.input_sender(),
+            move |message| match message {
+                StudyViewOutput::ShowError(error) => XBibleAppInput::ShowError(error),
+                StudyViewOutput::ToggleSidebar => XBibleAppInput::ToggleSidebar,
+                StudyViewOutput::OpenStoreRequested => XBibleAppInput::OpenStore,
+                _ => XBibleAppInput::ShowError("Study action is not connected yet".to_string()),
+            },
+        );
         let mut pages_cache = HashMap::new();
         pages_cache.insert(
             XBibleNavigationPage::Study.to_key(),
@@ -123,7 +125,7 @@ impl Component for XBibleApp {
         widgets: &mut Self::Widgets,
         message: Self::Input,
         sender: relm4::prelude::ComponentSender<Self>,
-        root: &Self::Root,
+        _root: &Self::Root,
     ) {
         match message {
             XBibleAppInput::SelectPage(page) => {
@@ -131,17 +133,23 @@ impl Component for XBibleApp {
 
                 if !self.pages_cache.contains_key(&key) {
                     let navigation_page = match page {
-                        XBibleNavigationPage::Study => {
-                            PageController::Study(StudyView::builder().launch(()).forward(
+                        XBibleNavigationPage::Study => PageController::Study(
+                            StudyView::builder().launch(self.engine.clone()).forward(
                                 sender.input_sender(),
                                 move |message| match message {
                                     StudyViewOutput::ShowError(error) => {
                                         XBibleAppInput::ShowError(error)
                                     }
                                     StudyViewOutput::ToggleSidebar => XBibleAppInput::ToggleSidebar,
+                                    StudyViewOutput::OpenStoreRequested => {
+                                        XBibleAppInput::OpenStore
+                                    }
+                                    _ => XBibleAppInput::ShowError(
+                                        "Study action is not connected yet".to_string(),
+                                    ),
                                 },
-                            ))
-                        }
+                            ),
+                        ),
                         XBibleNavigationPage::Store => PageController::Store(
                             StoreView::builder().launch(self.engine.clone()).detach(),
                         ),
@@ -161,6 +169,20 @@ impl Component for XBibleApp {
                 error!("{error}");
             }
             XBibleAppInput::ToggleSidebar => self.sidebar_collapsed = !self.sidebar_collapsed,
+            XBibleAppInput::OpenStore => {
+                let key = XBibleNavigationPage::Store.to_key();
+                if !self.pages_cache.contains_key(&key) {
+                    let store = StoreView::builder().launch(self.engine.clone()).detach();
+                    self.pages_cache
+                        .insert(key.clone(), PageController::Store(store));
+                }
+                self.current_page_key = key;
+                let child = self
+                    .pages_cache
+                    .get(&self.current_page_key)
+                    .map(|page| page.widget().upcast_ref::<gtk::Widget>());
+                widgets.main_content.set_child(child);
+            }
         }
     }
 }

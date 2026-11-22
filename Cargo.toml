@@ -17,6 +17,8 @@ async-channel = "2.5.0"
 log = "0.4.33"
 glib = "0.22.11"
 gettext-rs = { version = "0.8.0", features = ["gettext-system"] }
+serde_json = "1.0.154"
+serde = "1.0.229"
 
 
 [build-dependencies]

@@ -15,7 +15,7 @@ use crate::core::engine::SharedEngine;
 /// translation, `"theographic:person"` for an entity set, or `"adam-clarke"`
 /// for a commentary.
 #[derive(Debug, Clone, PartialEq)]
-pub struct InstallState {
+pub(crate) struct InstallState {
     pub item_id: String,
     pub kind: String,
     pub fraction: f64,
@@ -25,7 +25,7 @@ pub struct InstallState {
 }
 
 #[derive(Debug)]
-pub struct StoreWorker {
+pub(crate) struct StoreWorker {
     engine: SharedEngine,
     store: Arc<Store>,
     reader: Arc<XBibleReader>,
@@ -38,7 +38,7 @@ pub struct StoreWorker {
 }
 
 #[derive(Debug)]
-pub enum StoreWorkerInput {
+pub(crate) enum StoreWorkerInput {
     /// Mirrors `StoreViewModel.setupEngine()` -> refreshes catalog.
     Setup,
     /// Refreshes remote catalog shelves & language facets.
@@ -70,7 +70,7 @@ pub enum StoreWorkerInput {
 }
 
 #[derive(Debug, Clone)]
-pub enum StoreWorkerOutput {
+pub(crate) enum StoreWorkerOutput {
     LoadingChanged(bool),
     CatalogUpdated {
         shelves: Vec<StoreShelf>,

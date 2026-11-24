@@ -85,6 +85,9 @@ pub(crate) struct StudyView {
     selected_translation_id: Option<String>,
     selected_book_id: Option<String>,
     selected_chapter: Option<i32>,
+    version_button_label: Option<gtk::Label>,
+    book_button_label: Option<gtk::Label>,
+    chapter_button_label: Option<gtk::Label>,
     page_controls: Controller<ExpandingThemeMenu>,
 }
 
@@ -196,12 +199,9 @@ impl relm4::Component for StudyView {
                                 #[wrap(Some)]
                                 set_child = &gtk::Box {
                                     set_spacing: 4,
+                                    #[name = "version_button_label"]
                                     gtk::Label {
-                                        #[watch]
-                                        set_label: model.active_header_state.as_ref()
-                                            .and_then(|s| s.module.as_ref())
-                                            .map(|m| m.name.as_str())
-                                            .unwrap_or("Select Version"),
+                                        set_label: "Select Version",
                                     },
                                     gtk::Image { set_icon_name: Some("pan-down-symbolic") },
                                 },
@@ -229,12 +229,9 @@ impl relm4::Component for StudyView {
                                 #[wrap(Some)]
                                 set_child = &gtk::Box {
                                     set_spacing: 4,
+                                    #[name = "book_button_label"]
                                     gtk::Label {
-                                        #[watch]
-                                        set_label: model.active_header_state.as_ref()
-                                            .and_then(|s| s.book.as_ref())
-                                            .map(|b| b.name.as_str())
-                                            .unwrap_or("Select Book"),
+                                        set_label: "Select Book",
                                     },
                                     gtk::Image { set_icon_name: Some("pan-down-symbolic") },
                                 },
@@ -262,12 +259,9 @@ impl relm4::Component for StudyView {
                                 #[wrap(Some)]
                                 set_child = &gtk::Box {
                                     set_spacing: 4,
+                                    #[name = "chapter_button_label"]
                                     gtk::Label {
-                                        #[watch]
-                                        set_label: &model.active_header_state.as_ref()
-                                            .and_then(|s| s.chapter)
-                                            .map(|c| format!("Chapter {c}"))
-                                            .unwrap_or_else(|| "Select Chapter".to_string()),
+                                        set_label: "Select Chapter",
                                     },
                                     gtk::Image { set_icon_name: Some("pan-down-symbolic") },
                                 },
@@ -392,11 +386,18 @@ impl relm4::Component for StudyView {
             selected_translation_id: None,
             selected_book_id: None,
             selected_chapter: None,
+            version_button_label: None,
+            book_button_label: None,
+            chapter_button_label: None,
             page_controls,
         };
         let widgets = view_output!();
+        model.version_button_label = Some(widgets.version_button_label.clone());
+        model.book_button_label = Some(widgets.book_button_label.clone());
+        model.chapter_button_label = Some(widgets.chapter_button_label.clone());
 
         let mut model = model;
+        model.update_header_labels();
         model.append_tab(
             &widgets.tab_view,
             &gettext("Reader"),
@@ -929,6 +930,7 @@ impl StudyView {
             book,
             chapter,
         });
+        self.update_header_labels();
     }
 
     fn update_header_state_with_translation(&mut self, translation: Option<GenericTranslation>) {
@@ -968,6 +970,35 @@ impl StudyView {
             book,
             chapter,
         });
+        self.update_header_labels();
+    }
+
+    fn update_header_labels(&self) {
+        let state = self.active_header_state.as_ref();
+        if let Some(label) = &self.version_button_label {
+            label.set_label(
+                state
+                    .and_then(|state| state.module.as_ref())
+                    .map(|translation| translation.short_name.as_str())
+                    .unwrap_or("Select Version"),
+            );
+        }
+        if let Some(label) = &self.book_button_label {
+            label.set_label(
+                state
+                    .and_then(|state| state.book.as_ref())
+                    .map(|book| book.name.as_str())
+                    .unwrap_or("Select Book"),
+            );
+        }
+        if let Some(label) = &self.chapter_button_label {
+            label.set_label(
+                &state
+                    .and_then(|state| state.chapter)
+                    .map(|chapter| format!("Chapter {chapter}"))
+                    .unwrap_or_else(|| "Select Chapter".to_string()),
+            );
+        }
     }
 
     fn append_tab(

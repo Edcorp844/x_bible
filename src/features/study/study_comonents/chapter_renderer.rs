@@ -274,7 +274,7 @@ fn build_verse_line_row(
         num_lbl.add_css_class("accent");
         num_lbl.set_attributes(Some(&make_attr_list(
             config,
-            base_pt * 0.9,
+            base_pt * 0.5,
             pango::Weight::Bold,
             None,
             None,
@@ -356,15 +356,19 @@ fn build_paragraph_block(
         .build();
 
     let mut combined = String::new();
+    let mut number_ranges = Vec::new();
     for (idx, verse) in verses.iter().enumerate() {
         if idx > 0 {
             combined.push(' ');
         }
         if config.show_verse_numbers && verse.number > 0 {
+            let start = combined.len() as u32;
             combined.push_str(&verse.number.to_string());
             if config.show_verse_notes && !verse.footnote_ids.is_empty() {
                 combined.push('*');
             }
+            let end = combined.len() as u32;
+            number_ranges.push((start, end));
             combined.push(' ');
         }
         combined.push_str(&render_spans_text(
@@ -410,14 +414,29 @@ fn build_paragraph_block(
             gtk::Justification::Left
         })
         .build();
-    label.set_attributes(Some(&make_attr_list(
+    let attrs = make_attr_list(
         config,
         base_pt,
         pango::Weight::Normal,
         bg_hex,
         ul_hex,
         line_spacing_pt,
-    )));
+    );
+    for (start, end) in number_ranges {
+        let mut size = pango::AttrSize::new(((base_pt * 0.5 * pango::SCALE as f64) as i32).max(1));
+        size.set_start_index(start);
+        size.set_end_index(end);
+        attrs.insert(size);
+        let mut weight = pango::AttrInt::new_weight(pango::Weight::Bold);
+        weight.set_start_index(start);
+        weight.set_end_index(end);
+        attrs.insert(weight);
+        let mut color = pango::AttrColor::new_foreground(0x35 * 257, 0x84 * 257, 0xe4 * 257);
+        color.set_start_index(start);
+        color.set_end_index(end);
+        attrs.insert(color);
+    }
+    label.set_attributes(Some(&attrs));
 
     container.append(&label);
     attach_verse_context_menu(

@@ -22,6 +22,7 @@ use crate::{
             ChapterViewEvent, StudyToolKind, VerseContextAction, build_chapter_view,
         },
         commentary_panel::build_commentary_panel,
+        page_control_button::ExpandingThemeMenu,
         search_panel::{SearchPanelEvent, build_search_panel},
     },
     workers::reader_worker::{
@@ -49,6 +50,8 @@ struct TabSlot {
     page: adw::TabPage,
     stack: gtk::Stack,
     mode: StudyPanelMode,
+    read_overlay: gtk::Overlay,
+    read_scroll: gtk::ScrolledWindow,
     book_filter: Option<String>,
 }
 
@@ -79,6 +82,10 @@ pub(crate) struct StudyView {
     reader_worker: WorkerController<ReaderWorker>,
     installed_translations: Vec<GenericTranslation>,
     active_header_state: Option<HeaderState>,
+    selected_translation_id: Option<String>,
+    selected_book_id: Option<String>,
+    selected_chapter: Option<i32>,
+    page_controls: Controller<ExpandingThemeMenu>,
 }
 
 #[derive(Debug)]
@@ -122,6 +129,10 @@ pub(crate) enum StudyViewInput {
     SelectChapter(i32),
     OpenStore,
     RefreshVersions,
+    PreviousChapter,
+    NextChapter,
+    OpenChapterPicker,
+    OpenThemePopup,
 }
 
 #[derive(Debug, Clone)]
@@ -245,6 +256,7 @@ impl relm4::Component for StudyView {
                                     },
                                 },
                             },
+                            #[name = "chapter_menu"]
                             gtk::MenuButton {
                                 set_tooltip_text: Some("Select Chapter"),
                                 #[wrap(Some)]
@@ -340,8 +352,16 @@ impl relm4::Component for StudyView {
             HighlightStore::default()
         });
         let reader_worker = ReaderWorker::builder()
-            .detach_worker(engine)
+            .detach_worker(engine.clone())
             .forward(sender.input_sender(), StudyViewInput::ReaderWorkerEvent);
+        let page_controls = ExpandingThemeMenu::builder()
+            .launch(TextConfig::load().unwrap_or_default())
+            .forward(sender.input_sender(), |event| match event {
+                crate::features::study::study_comonents::page_control_button::ThemeMenuOutput::PreviousChapter => StudyViewInput::PreviousChapter,
+                crate::features::study::study_comonents::page_control_button::ThemeMenuOutput::NextChapter => StudyViewInput::NextChapter,
+                crate::features::study::study_comonents::page_control_button::ThemeMenuOutput::OpenThemePopup => StudyViewInput::OpenThemePopup,
+                crate::features::study::study_comonents::page_control_button::ThemeMenuOutput::DimBackground(_) => StudyViewInput::RefreshVersions,
+            });
 
         let mut model = Self {
             tab_counter: 0,
@@ -369,6 +389,10 @@ impl relm4::Component for StudyView {
             reader_worker,
             installed_translations: Vec::new(),
             active_header_state: None,
+            selected_translation_id: None,
+            selected_book_id: None,
+            selected_chapter: None,
+            page_controls,
         };
         let widgets = view_output!();
 
@@ -445,6 +469,7 @@ impl relm4::Component for StudyView {
                 self.current_chapter = chapter;
                 self.chapter_entities = entities;
                 self.is_loading_content = loading;
+                self.sync_selection_from_chapter();
                 self.update_header_state();
                 self.refresh_all_tabs(&sender);
             }
@@ -492,6 +517,8 @@ impl relm4::Component for StudyView {
                     if needs_initial_selection
                         && let Some(translation) = self.installed_translations.first().cloned()
                     {
+                        self.selected_translation_id = Some(translation.id.clone());
+                        self.update_header_state();
                         self.reader_worker
                             .emit(ReaderWorkerInput::SelectTranslation(translation));
                     }
@@ -501,6 +528,16 @@ impl relm4::Component for StudyView {
                 }
                 ReaderWorkerOutput::SectionsUpdated(sections) => {
                     self.sections = sections;
+                    if self.selected_book_id.is_none()
+                        && let Some(book) = self
+                            .sections
+                            .iter()
+                            .flat_map(|section| section.books.iter())
+                            .next()
+                    {
+                        self.selected_book_id = Some(book.id.clone());
+                        self.selected_chapter = Some(1);
+                    }
                     self.refresh_book_list(&widgets.book_list, &sender);
                     self.refresh_chapter_list(&widgets.chapter_list, &sender);
                     self.update_header_state();
@@ -512,6 +549,11 @@ impl relm4::Component for StudyView {
                     ..
                 } => {
                     self.current_chapter = chapter;
+                    if let Some(chapter) = self.current_chapter.as_ref() {
+                        self.selected_translation_id = Some(chapter.translation_id.clone());
+                        self.selected_book_id = Some(chapter.book_id.clone());
+                        self.selected_chapter = Some(chapter.chapter_number);
+                    }
                     self.update_header_state_with_translation(translation);
                     self.refresh_chapter_list(&widgets.chapter_list, &sender);
                     self.refresh_all_tabs(&sender);
@@ -578,22 +620,25 @@ impl relm4::Component for StudyView {
                 | ReaderWorkerOutput::TabsUpdated { .. } => {}
             },
             StudyViewInput::SelectTranslation(translation) => {
+                self.selected_translation_id = Some(translation.id.clone());
+                self.update_header_state();
                 self.reader_worker
                     .emit(ReaderWorkerInput::SelectTranslation(translation));
             }
-            StudyViewInput::SelectBook(book_id) => self
-                .reader_worker
-                .emit(ReaderWorkerInput::SelectBook(book_id)),
+            StudyViewInput::SelectBook(book_id) => {
+                self.selected_book_id = Some(book_id.clone());
+                self.selected_chapter = Some(1);
+                self.update_header_state();
+                self.refresh_chapter_list(&widgets.chapter_list, &sender);
+                self.reader_worker
+                    .emit(ReaderWorkerInput::SelectBook(book_id));
+            }
             StudyViewInput::SelectChapter(chapter) => {
-                if let Some(book) = self
-                    .active_header_state
-                    .as_ref()
-                    .and_then(|state| state.book.as_ref())
-                {
-                    self.reader_worker.emit(ReaderWorkerInput::OpenChapter {
-                        book_id: book.id.clone(),
-                        chapter,
-                    });
+                self.selected_chapter = Some(chapter);
+                self.update_header_state();
+                if let Some(book_id) = self.selected_book_id.clone() {
+                    self.reader_worker
+                        .emit(ReaderWorkerInput::OpenChapter { book_id, chapter });
                 }
             }
             StudyViewInput::OpenStore => {
@@ -602,6 +647,18 @@ impl relm4::Component for StudyView {
             StudyViewInput::RefreshVersions => {
                 self.reader_worker
                     .emit(ReaderWorkerInput::ReloadInstalledTranslations);
+            }
+            StudyViewInput::PreviousChapter => {
+                self.reader_worker.emit(ReaderWorkerInput::PreviousChapter);
+            }
+            StudyViewInput::NextChapter => {
+                self.reader_worker.emit(ReaderWorkerInput::NextChapter);
+            }
+            StudyViewInput::OpenChapterPicker => {
+                widgets.chapter_menu.popup();
+            }
+            StudyViewInput::OpenThemePopup => {
+                let _ = sender.output(StudyViewOutput::ToggleSidebar);
             }
             StudyViewInput::ChapterEvent(event) => match event {
                 ChapterViewEvent::VerseAction {
@@ -727,6 +784,14 @@ impl relm4::Component for StudyView {
 }
 
 impl StudyView {
+    fn sync_selection_from_chapter(&mut self) {
+        if let Some(chapter) = self.current_chapter.as_ref() {
+            self.selected_translation_id = Some(chapter.translation_id.clone());
+            self.selected_book_id = Some(chapter.book_id.clone());
+            self.selected_chapter = Some(chapter.chapter_number);
+        }
+    }
+
     pub(crate) fn tab_kind_from_worker(kind: ReaderTabKind) -> StudyPanelMode {
         match kind {
             ReaderTabKind::Read => StudyPanelMode::Read,
@@ -812,23 +877,47 @@ impl StudyView {
     }
 
     fn update_header_state(&mut self) {
-        let translation = self.current_chapter.as_ref().and_then(|chapter| {
-            self.installed_translations
-                .iter()
-                .find(|item| item.id == chapter.translation_id)
-                .cloned()
-        });
-        let book = self.current_chapter.as_ref().and_then(|chapter| {
-            self.sections
-                .iter()
-                .flat_map(|section| section.books.iter())
-                .find(|item| item.id == chapter.book_id)
-                .cloned()
-        });
-        let chapter = self
-            .current_chapter
+        let translation = self
+            .selected_translation_id
             .as_ref()
-            .map(|chapter| chapter.chapter_number);
+            .and_then(|id| {
+                self.installed_translations
+                    .iter()
+                    .find(|item| &item.id == id)
+                    .cloned()
+            })
+            .or_else(|| {
+                self.current_chapter.as_ref().and_then(|chapter| {
+                    self.installed_translations
+                        .iter()
+                        .find(|item| item.id == chapter.translation_id)
+                        .cloned()
+                })
+            });
+        let book = self
+            .selected_book_id
+            .as_ref()
+            .and_then(|id| {
+                self.sections
+                    .iter()
+                    .flat_map(|section| section.books.iter())
+                    .find(|item| &item.id == id)
+                    .cloned()
+            })
+            .or_else(|| {
+                self.current_chapter.as_ref().and_then(|chapter| {
+                    self.sections
+                        .iter()
+                        .flat_map(|section| section.books.iter())
+                        .find(|item| item.id == chapter.book_id)
+                        .cloned()
+                })
+            });
+        let chapter = self.selected_chapter.or_else(|| {
+            self.current_chapter
+                .as_ref()
+                .map(|chapter| chapter.chapter_number)
+        });
         self.active_header_state = Some(HeaderState {
             module: translation,
             book,
@@ -837,17 +926,30 @@ impl StudyView {
     }
 
     fn update_header_state_with_translation(&mut self, translation: Option<GenericTranslation>) {
-        let book = self.current_chapter.as_ref().and_then(|chapter| {
-            self.sections
-                .iter()
-                .flat_map(|section| section.books.iter())
-                .find(|item| item.id == chapter.book_id)
-                .cloned()
-        });
-        let chapter = self
-            .current_chapter
+        let book = self
+            .selected_book_id
             .as_ref()
-            .map(|chapter| chapter.chapter_number);
+            .and_then(|id| {
+                self.sections
+                    .iter()
+                    .flat_map(|section| section.books.iter())
+                    .find(|item| &item.id == id)
+                    .cloned()
+            })
+            .or_else(|| {
+                self.current_chapter.as_ref().and_then(|chapter| {
+                    self.sections
+                        .iter()
+                        .flat_map(|section| section.books.iter())
+                        .find(|item| item.id == chapter.book_id)
+                        .cloned()
+                })
+            });
+        let chapter = self.selected_chapter.or_else(|| {
+            self.current_chapter
+                .as_ref()
+                .map(|chapter| chapter.chapter_number)
+        });
         self.active_header_state = Some(HeaderState {
             module: translation.or_else(|| {
                 self.current_chapter.as_ref().and_then(|chapter| {
@@ -871,6 +973,22 @@ impl StudyView {
         sender: &ComponentSender<Self>,
     ) {
         let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
+        let read_overlay = gtk::Overlay::new();
+        read_overlay.set_hexpand(true);
+        read_overlay.set_vexpand(true);
+        let read_scroll = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .hexpand(true)
+            .build();
+        read_overlay.set_child(Some(&read_scroll));
+        let page_control = self.page_controls.widget();
+        page_control.set_halign(gtk::Align::Fill);
+        page_control.set_valign(gtk::Align::Fill);
+        page_control.set_hexpand(true);
+        page_control.set_vexpand(true);
+        read_overlay.add_overlay(page_control);
+        stack.add_named(&read_overlay, Some("read"));
         let page = tab_view.append(&stack);
         page.set_title(title);
         if select {
@@ -880,6 +998,8 @@ impl StudyView {
             page,
             stack,
             mode,
+            read_overlay,
+            read_scroll,
             book_filter: None,
         };
         self.refresh_slot(&mut slot, sender);
@@ -905,11 +1025,7 @@ impl StudyView {
     fn refresh_slot(&self, slot: &mut TabSlot, sender: &ComponentSender<Self>) {
         match slot.mode {
             StudyPanelMode::Read => {
-                let scroll = gtk::ScrolledWindow::builder()
-                    .hscrollbar_policy(gtk::PolicyType::Never)
-                    .vexpand(true)
-                    .hexpand(true)
-                    .build();
+                let scroll = &slot.read_scroll;
                 if self.is_loading_content {
                     let spinner_box = gtk::Box::builder()
                         .orientation(gtk::Orientation::Vertical)
@@ -936,6 +1052,12 @@ impl StudyView {
                         },
                     );
                     scroll.set_child(Some(&chapter_view));
+
+                    self.page_controls.emit(crate::features::study::study_comonents::page_control_button::ThemeMenuInput::SetNavigationState {
+                        has_prev: chapter.prev_chapter.is_some() || chapter.chapter_number > 1,
+                        has_next: chapter.next_chapter.is_some() || self.sections.iter().flat_map(|section| section.books.iter()).any(|book| book.id == chapter.book_id && chapter.chapter_number < book.number_of_chapters),
+                        chapter_label: format!("{} {}", chapter.book_name, chapter.chapter_number),
+                    });
                     slot.page
                         .set_title(&format!("{} {}", chapter.book_name, chapter.chapter_number));
                 } else if self.installed_translations.is_empty() {
@@ -994,7 +1116,6 @@ impl StudyView {
                     placeholder.append(&subtitle);
                     scroll.set_child(Some(&placeholder));
                 }
-                slot.stack.add_named(&scroll, Some("read"));
                 slot.stack.set_visible_child_name("read");
             }
             StudyPanelMode::Commentary => {
@@ -1010,6 +1131,9 @@ impl StudyView {
                         let _ = tx.send(StudyViewInput::CommentarySelected(id, name));
                     },
                 );
+                if let Some(existing) = slot.stack.child_by_name("commentary") {
+                    slot.stack.remove(&existing);
+                }
                 slot.stack.add_named(&panel, Some("commentary"));
                 slot.stack.set_visible_child_name("commentary");
             }
@@ -1030,6 +1154,9 @@ impl StudyView {
                         let _ = tx.send(StudyViewInput::SearchEvent(event));
                     },
                 );
+                if let Some(existing) = slot.stack.child_by_name("search") {
+                    slot.stack.remove(&existing);
+                }
                 slot.stack.add_named(&panel, Some("search"));
                 slot.stack.set_visible_child_name("search");
             }

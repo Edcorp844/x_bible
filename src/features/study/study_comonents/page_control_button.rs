@@ -118,8 +118,12 @@ impl Component for ExpandingThemeMenu {
         let canvas = gtk::DrawingArea::new();
         canvas.set_width_request(PILL_WIDTH as i32);
         canvas.set_height_request(PILL_HEIGHT as i32);
+        canvas.set_hexpand(false);
+        canvas.set_vexpand(false);
         canvas.set_halign(gtk::Align::End);
         canvas.set_valign(gtk::Align::End);
+        canvas.set_can_target(true);
+        canvas.set_overflow(gtk::Overflow::Hidden);
         canvas.set_margin_end(16);
         canvas.set_margin_bottom(16);
 

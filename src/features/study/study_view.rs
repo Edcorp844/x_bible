@@ -267,7 +267,7 @@ impl relm4::Component for StudyView {
                                         set_label: &model.active_header_state.as_ref()
                                             .and_then(|s| s.chapter)
                                             .map(|c| format!("Chapter {c}"))
-                                            .unwrap_or_default(),
+                                            .unwrap_or_else(|| "Select Chapter".to_string()),
                                     },
                                     gtk::Image { set_icon_name: Some("pan-down-symbolic") },
                                 },
@@ -528,7 +528,13 @@ impl relm4::Component for StudyView {
                 }
                 ReaderWorkerOutput::SectionsUpdated(sections) => {
                     self.sections = sections;
-                    if self.selected_book_id.is_none()
+                    let selected_book_is_valid = self.selected_book_id.as_ref().is_some_and(|id| {
+                        self.sections
+                            .iter()
+                            .flat_map(|section| section.books.iter())
+                            .any(|book| &book.id == id)
+                    });
+                    if !selected_book_is_valid
                         && let Some(book) = self
                             .sections
                             .iter()
@@ -983,10 +989,6 @@ impl StudyView {
             .build();
         read_overlay.set_child(Some(&read_scroll));
         let page_control = self.page_controls.widget();
-        page_control.set_halign(gtk::Align::Fill);
-        page_control.set_valign(gtk::Align::Fill);
-        page_control.set_hexpand(true);
-        page_control.set_vexpand(true);
         read_overlay.add_overlay(page_control);
         stack.add_named(&read_overlay, Some("read"));
         let page = tab_view.append(&stack);
